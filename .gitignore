@@ -10,6 +10,10 @@
 /[Ll]ogs/
 /[Mm]emoryCaptures/
 
+# Burst compiler
+*_BurstDebugInformation_DoNotShip/
+BurstDebugInformation_DoNotShip/
+
 # Asset meta data should only be ignored when the corresponding asset is also ignored
 !/[Aa]ssets/**/*.meta
 
@@ -33,6 +37,7 @@ ExportedObj/
 *.sln
 *.suo
 *.tmp
+*.utmp
 *.user
 *.userprefs
 *.pidb
@@ -85,3 +90,37 @@ crashlytics-build.properties
 
 # IDE - Rider
 .idea/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# NuGet packages (for gRPC)
+/[Pp]ackages/
+*.nupkg
+*.snupkg
+
+# gRPC Generated files
+Assets/Scripts/gRPC/Generated/
+*.pb.cs
+
+# Android Studio
+*.iml
+local.properties
+.gradle/
+.navigation/
+captures/
+output.json
+
+# Build outputs
+*.apk
+*.aab
+*.ipa
+/[Bb]uild/
+/[Bb]uilds/

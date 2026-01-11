@@ -1,0 +1,398 @@
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+using StargazerProbe.Sensors;
+using StargazerProbe.Camera;
+using StargazerProbe.Config;
+
+namespace StargazerProbe.UI
+{
+    /// <summary>
+    /// メインUIを管理するクラス
+    /// </summary>
+    public class UIManager : MonoBehaviour
+    {
+        [Header("References")]
+        [SerializeField] private IMUSensorManager sensorManager;
+        [SerializeField] private MobileCameraCapture cameraCapture;
+        
+        [Header("UI - Camera Preview")]
+        [SerializeField] private RawImage cameraPreviewImage;
+        
+        [Header("UI - Status Bar")]
+        [SerializeField] private TextMeshProUGUI connectionStatusText;
+        [SerializeField] private TextMeshProUGUI fpsCounterText;
+        [SerializeField] private TextMeshProUGUI queueSizeText;
+        
+        [Header("UI - Sensor Display")]
+        [SerializeField] private TextMeshProUGUI accelText;
+        [SerializeField] private TextMeshProUGUI gyroText;
+        [SerializeField] private TextMeshProUGUI magText;
+        
+        [Header("UI - Control Panel")]
+        [SerializeField] private Button settingsButton;
+        [SerializeField] private Button startStopButton;
+        [SerializeField] private TextMeshProUGUI startStopButtonText;
+        [SerializeField] private Image recordingIndicator;
+        
+        [Header("UI - Settings Panel")]
+        [SerializeField] private GameObject settingsPanel;
+        
+        private bool isRunning = false;
+        private float fpsUpdateInterval = 0.5f;
+        private float lastFpsUpdate;
+        private int frameCount;
+        
+        private void Start()
+        {
+            InitializeUI();
+            SetupEventListeners();
+        }
+        
+        private void InitializeUI()
+        {
+            // 初期状態
+            if (settingsPanel != null)
+            {
+                settingsPanel.SetActive(false);
+            }
+            if (recordingIndicator != null)
+            {
+                recordingIndicator.enabled = false;
+            }
+            UpdateConnectionStatus(ConnectionState.Disconnected);
+            UpdateStartStopButton(false);
+            
+            Debug.Log("UI initialized");
+        }
+        
+        private void SetupEventListeners()
+        {
+            // ボタンイベント
+            if (startStopButton != null)
+            {
+                startStopButton.onClick.AddListener(OnStartStopButtonClicked);
+            }
+            else
+            {
+                Debug.LogError("ERROR: StartStopButton is null!");
+            }
+            
+            if (settingsButton != null)
+            {
+                settingsButton.onClick.AddListener(OnSettingsButtonClicked);
+            }
+            else
+            {
+                Debug.LogError("ERROR: SettingsButton is null!");
+            }
+            
+            // センサーイベント
+            if (sensorManager != null)
+            {
+                sensorManager.OnSensorDataUpdated += OnSensorDataUpdated;
+            }
+            
+            // カメライベント
+            if (cameraCapture != null)
+            {
+                cameraCapture.OnFrameCaptured += OnFrameCaptured;
+            }
+        }
+        
+        private void Update()
+        {
+            UpdateFPS();
+            UpdateCameraPreview();
+        }
+        
+        private void UpdateFPS()
+        {
+            frameCount++;
+            
+            if (Time.time - lastFpsUpdate >= fpsUpdateInterval)
+            {
+                float fps = frameCount / (Time.time - lastFpsUpdate);
+                if (fpsCounterText != null)
+                {
+                    fpsCounterText.text = $"FPS: {fps:F1}";
+                }
+                
+                frameCount = 0;
+                lastFpsUpdate = Time.time;
+            }
+        }
+        
+        private void UpdateCameraPreview()
+        {
+            if (cameraCapture == null || !cameraCapture.IsCapturing || cameraPreviewImage == null)
+            {
+                return;
+            }
+
+            Texture previewTexture = cameraCapture.GetPreviewTexture();
+            if (previewTexture == null)
+            {
+                return;
+            }
+
+            if (cameraPreviewImage.texture != previewTexture)
+            {
+                cameraPreviewImage.texture = previewTexture;
+                cameraPreviewImage.material = null;
+                cameraPreviewImage.color = Color.white;
+            }
+
+            if (previewTexture is WebCamTexture webCam)
+            {
+                // Remove AspectRatioFitter if exists, as we will handle layout manually
+                var fitter = cameraPreviewImage.GetComponent<AspectRatioFitter>();
+                if (fitter != null) Destroy(fitter);
+
+                // Reset Anchors to Center so sizeDelta works as absolute size
+                RectTransform rt = cameraPreviewImage.rectTransform;
+                rt.anchorMin = new Vector2(0.5f, 0.5f);
+                rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.anchoredPosition = Vector2.zero;
+
+                int angle = webCam.videoRotationAngle;
+                bool isMirrored = webCam.videoVerticallyMirrored;
+
+                // 1. Rotation
+                rt.localEulerAngles = new Vector3(0, 0, -angle);
+
+                // 2. Scale / Mirroring
+                Vector3 scale = Vector3.one;
+                if (isMirrored)
+                {
+                    scale.y = -1f;
+                }
+                rt.localScale = scale;
+
+                // 3. Size (Aspect Ratio Fitting)
+                RectTransform parentRect = cameraPreviewImage.transform.parent as RectTransform;
+                if (parentRect == null) return;
+
+                float parentWidth = parentRect.rect.width;
+                float parentHeight = parentRect.rect.height;
+
+
+                float videoWidth = webCam.width;
+                float videoHeight = webCam.height;
+
+                // Visual dimensions after rotation
+                float visualVideoWidth, visualVideoHeight;
+                if (Mathf.Abs(angle) == 90 || Mathf.Abs(angle) == 270)
+                {
+                    visualVideoWidth = videoHeight;
+                    visualVideoHeight = videoWidth;
+                }
+                else
+                {
+                    visualVideoWidth = videoWidth;
+                    visualVideoHeight = videoHeight;
+                }
+
+                // Fit Parent (Inside) - 画角を維持するため全体を表示する（黒帯が出る可能性があるが、映像は欠けない）
+                float widthRatio = parentWidth / visualVideoWidth;
+                float heightRatio = parentHeight / visualVideoHeight;
+                
+                float ratio = Mathf.Min(widthRatio, heightRatio);
+
+                cameraPreviewImage.rectTransform.sizeDelta = new Vector2(videoWidth * ratio, videoHeight * ratio);
+            }
+        }
+
+
+        private void OnDestroy()
+        {
+            // イベントリスナーのクリーンアップ
+            if (sensorManager != null)
+            {
+                sensorManager.OnSensorDataUpdated -= OnSensorDataUpdated;
+            }
+
+            if (cameraCapture != null)
+            {
+                cameraCapture.OnFrameCaptured -= OnFrameCaptured;
+            }
+        }
+        
+        private void OnSensorDataUpdated(SensorData data)
+        {
+            // センサー値を表示
+            if (accelText != null)
+            {
+                accelText.text = $"Accel: {data.Acceleration.x:F2}, {data.Acceleration.y:F2}, {data.Acceleration.z:F2}";
+            }
+            if (gyroText != null)
+            {
+                gyroText.text = $"Gyro:  {data.Gyroscope.x:F2}, {data.Gyroscope.y:F2}, {data.Gyroscope.z:F2}";
+            }
+            if (magText != null)
+            {
+                magText.text = $"Mag:   {data.Magnetometer.x:F1}, {data.Magnetometer.y:F1}, {data.Magnetometer.z:F1}";
+            }
+        }
+        
+        private void OnFrameCaptured(CameraFrameData frameData)
+        {
+            // キューサイズを更新（後でバッファ実装時に使用）
+            if (queueSizeText != null)
+            {
+                queueSizeText.text = $"Queue: 0";
+            }
+        }
+        
+        private void OnStartStopButtonClicked()
+        {
+            if (!isRunning)
+            {
+                StartCapture();
+            }
+            else
+            {
+                StopCapture();
+            }
+        }
+        
+        private void StartCapture()
+        {
+            // カメラ開始
+            if (cameraCapture != null)
+            {
+                cameraCapture.StartCapture();
+            }
+            
+            isRunning = true;
+            UpdateStartStopButton(true);
+            if (recordingIndicator != null)
+            {
+                recordingIndicator.enabled = true;
+                StartCoroutine(BlinkRecordingIndicator());
+            }
+            
+            Debug.Log("Capture started");
+        }
+        
+        private void StopCapture()
+        {
+            // カメラ停止
+            if (cameraCapture != null)
+            {
+                cameraCapture.StopCapture();
+            }
+
+            // Preview Reset
+            if (cameraPreviewImage != null)
+            {
+                cameraPreviewImage.texture = null;
+                cameraPreviewImage.color = new Color(0.2f, 0.2f, 0.2f);
+                
+                // Reset Transforms
+                cameraPreviewImage.rectTransform.localEulerAngles = Vector3.zero;
+                cameraPreviewImage.rectTransform.localScale = Vector3.one;
+                
+                // Reset Layout to Stretch/Fill
+                cameraPreviewImage.rectTransform.anchorMin = Vector2.zero;
+                cameraPreviewImage.rectTransform.anchorMax = Vector2.one;
+                cameraPreviewImage.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+                cameraPreviewImage.rectTransform.anchoredPosition = Vector2.zero;
+                cameraPreviewImage.rectTransform.sizeDelta = Vector2.zero;
+            }
+            
+            isRunning = false;
+            UpdateStartStopButton(false);
+            if (recordingIndicator != null)
+            {
+                recordingIndicator.enabled = false;
+            }
+            StopAllCoroutines();
+            
+            Debug.Log("Capture stopped");
+        }
+        
+        private System.Collections.IEnumerator BlinkRecordingIndicator()
+        {
+            while (isRunning)
+            {
+                if (recordingIndicator != null)
+                {
+                    recordingIndicator.enabled = !recordingIndicator.enabled;
+                }
+                yield return new WaitForSeconds(0.5f);
+            }
+        }
+        
+        private void UpdateStartStopButton(bool running)
+        {
+            if (startStopButtonText != null)
+            {
+                if (running)
+                {
+                    startStopButtonText.text = "Stop";
+                    if (startStopButton != null)
+                    {
+                        startStopButton.GetComponent<Image>().color = new Color(0.8f, 0.2f, 0.2f);
+                    }
+                }
+                else
+                {
+                    startStopButtonText.text = "Start";
+                    if (startStopButton != null)
+                    {
+                        startStopButton.GetComponent<Image>().color = new Color(0.2f, 0.8f, 0.2f);
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogError("ERROR: startStopButtonText is NULL!");
+            }
+        }
+        
+        private void OnSettingsButtonClicked()
+        {
+            Debug.Log("Settings button clicked");
+            if (settingsPanel != null)
+            {
+                settingsPanel.SetActive(!settingsPanel.activeSelf);
+            }
+        }
+        
+        public void UpdateConnectionStatus(ConnectionState state)
+        {
+            if (connectionStatusText == null)
+                return;
+                
+            switch (state)
+            {
+                case ConnectionState.Connected:
+                    connectionStatusText.text = "Connected";
+                    connectionStatusText.color = Color.green;
+                    break;
+                case ConnectionState.Connecting:
+                    connectionStatusText.text = "Connecting...";
+                    connectionStatusText.color = Color.yellow;
+                    break;
+                case ConnectionState.Disconnected:
+                    connectionStatusText.text = "Disconnected";
+                    connectionStatusText.color = Color.red;
+                    break;
+            }
+        }
+        
+        // OnDestroy moved above (also disposes preview material)
+    }
+    
+    /// <summary>
+    /// 接続状態の列挙型
+    /// </summary>
+    public enum ConnectionState
+    {
+        Disconnected,
+        Connecting,
+        Connected
+    }
+}
