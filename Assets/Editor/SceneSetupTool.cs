@@ -44,8 +44,15 @@ namespace StargazerProbe.Editor
                 Object.DestroyImmediate(comp.gameObject);
             }
             
-            MobileCameraCapture[] captures = Object.FindObjectsByType<MobileCameraCapture>(FindObjectsSortMode.None);
-            foreach (var comp in captures)
+            // ICameraCapture実装クラスを削除
+            MobileCameraCapture[] mobileCaptures = Object.FindObjectsByType<MobileCameraCapture>(FindObjectsSortMode.None);
+            foreach (var comp in mobileCaptures)
+            {
+                Object.DestroyImmediate(comp.gameObject);
+            }
+            
+            ARFoundationCameraCapture[] arCaptures = Object.FindObjectsByType<ARFoundationCameraCapture>(FindObjectsSortMode.None);
+            foreach (var comp in arCaptures)
             {
                 Object.DestroyImmediate(comp.gameObject);
             }
@@ -77,6 +84,9 @@ namespace StargazerProbe.Editor
             // Setup Main Camera (Black Background)
             SetupMainCamera();
             
+            // Setup AR Foundation (if using ARFoundation)
+            SetupARFoundation();
+            
             // 1. Managers
             GameObject sensorManager = CreateSensorManager();
             GameObject cameraCapture = CreateCameraCapture();
@@ -96,13 +106,15 @@ namespace StargazerProbe.Editor
             SettingsPanel settingsPanelComp = settingsPanel.GetComponent<SettingsPanel>();
             SerializedObject spSo = new SerializedObject(settingsPanelComp);
             spSo.FindProperty("sensorManager").objectReferenceValue = sensorManager.GetComponent<IMUSensorManager>();
-            spSo.FindProperty("cameraCapture").objectReferenceValue = cameraCapture.GetComponent<MobileCameraCapture>();
+            // ICameraCaptureを取得（MobileCameraCapture or ARFoundationCameraCapture）
+            Component cameraCaptureComp = cameraCapture.GetComponent<MobileCameraCapture>() as Component 
+                ?? cameraCapture.GetComponent<ARFoundationCameraCapture>() as Component;
+            spSo.FindProperty("cameraCapture").objectReferenceValue = cameraCaptureComp;
             spSo.ApplyModifiedProperties();
             
             // 5. UIManager and wire up references
             GameObject uiManager = CreateUIManager(
                 sensorManager.GetComponent<IMUSensorManager>(),
-                cameraCapture.GetComponent<MobileCameraCapture>(),
                 cameraPreview.transform.Find("PreviewContainer/PreviewImage").GetComponent<RawImage>(),
                 controlPanel,
                 controlPanel,
@@ -176,6 +188,64 @@ namespace StargazerProbe.Editor
             Debug.Log("Main Camera configured with black background");
         }
 
+        private static void SetupARFoundation()
+        {
+            // CameraCaptureFactoryの設定を確認
+            var captureType = CameraCaptureFactory.GetActiveCaptureType();
+            
+            if (captureType != CameraCaptureFactory.CaptureType.ARFoundation)
+            {
+                Debug.Log("AR Foundation not active, skipping AR setup");
+                return;
+            }
+            
+            Debug.Log("Setting up AR Foundation...");
+            
+            // AR Sessionを作成
+            GameObject arSession = GameObject.Find("AR Session");
+            if (arSession == null)
+            {
+                arSession = new GameObject("AR Session");
+                var arSessionComponent = arSession.AddComponent<UnityEngine.XR.ARFoundation.ARSession>();
+                Debug.Log("AR Session created");
+            }
+            
+            // XR Originを作成
+            GameObject xrOrigin = GameObject.Find("XR Origin");
+            if (xrOrigin == null)
+            {
+                xrOrigin = new GameObject("XR Origin");
+                var xrOriginComponent = xrOrigin.AddComponent<UnityEngine.XR.ARFoundation.ARSessionOrigin>();
+                
+                // AR Cameraを作成
+                GameObject arCamera = new GameObject("AR Camera");
+                arCamera.transform.SetParent(xrOrigin.transform, false);
+                arCamera.tag = "MainCamera";
+                
+                var camera = arCamera.AddComponent<UnityEngine.Camera>();
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.backgroundColor = Color.black;
+                camera.nearClipPlane = 0.1f;
+                camera.farClipPlane = 20f;
+                
+                arCamera.AddComponent<UnityEngine.XR.ARFoundation.ARCameraManager>();
+                arCamera.AddComponent<UnityEngine.XR.ARFoundation.ARCameraBackground>();
+                
+                xrOriginComponent.camera = camera;
+                
+                // Main Cameraを削除
+                var mainCam = UnityEngine.Camera.main;
+                if (mainCam != null && mainCam.gameObject != arCamera)
+                {
+                    Object.DestroyImmediate(mainCam.gameObject);
+                }
+                
+                Debug.Log("XR Origin with AR Camera created");
+            }
+            
+            Debug.Log("AR Foundation setup completed");
+        }
+
         private static GameObject CreateSensorManager()
         {
             GameObject go = new GameObject("SensorManager");
@@ -186,7 +256,8 @@ namespace StargazerProbe.Editor
         private static GameObject CreateCameraCapture()
         {
             GameObject go = new GameObject("CameraCapture");
-            go.AddComponent<MobileCameraCapture>();
+            // CameraCaptureFactoryを使用して適切な実装を追加
+            CameraCaptureFactory.CreateCameraCapture(go);
             return go;
         }
 
@@ -544,7 +615,6 @@ namespace StargazerProbe.Editor
 
         private static GameObject CreateUIManager(
             IMUSensorManager sensorManager,
-            MobileCameraCapture cameraCapture,
             RawImage cameraPreview,
             GameObject statusBar,
             GameObject sensorDisplay,
@@ -559,7 +629,7 @@ namespace StargazerProbe.Editor
             SerializedObject so = new SerializedObject(uiManager);
             
             so.FindProperty("sensorManager").objectReferenceValue = sensorManager;
-            so.FindProperty("cameraCapture").objectReferenceValue = cameraCapture;
+            // cameraCapture は UIManager.Start() で自動作成されるため設定不要
             so.FindProperty("cameraPreviewImage").objectReferenceValue = cameraPreview;
             so.FindProperty("connectionStatusText").objectReferenceValue = statusBar.transform.Find("InfoPanel/ConnectionStatus").GetComponent<TextMeshProUGUI>();
             so.FindProperty("fpsCounterText").objectReferenceValue = statusBar.transform.Find("InfoPanel/FPSCounter").GetComponent<TextMeshProUGUI>();

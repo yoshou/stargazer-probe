@@ -16,7 +16,7 @@ namespace StargazerProbe.Camera
     /// - JPEGエンコードはバックグラウンドで実行して、メインスレッドのフレーム落ちを抑える
     /// - エンコードが追いつかない場合はフレームを間引く（遅延ではなくFPS維持を優先）
     /// </summary>
-    public class MobileCameraCapture : MonoBehaviour
+    public class MobileCameraCapture : MonoBehaviour, ICameraCapture
     {
         [Header("Camera Settings")]
         [SerializeField] private int width = 1280;
@@ -156,7 +156,7 @@ namespace StargazerProbe.Camera
             IsCapturing = true;
             lastCaptureTime = Time.unscaledTime;
             
-            Debug.Log($"Camera started: {webCamTexture.width}x{webCamTexture.height} @ {targetFPS}fps");
+            Debug.Log($"[MobileCameraCapture] Started resolution={webCamTexture.width}x{webCamTexture.height} fps={targetFPS}");
             OnCaptureStarted?.Invoke();
         }
         
@@ -472,5 +472,7 @@ namespace StargazerProbe.Camera
         public int Width;
         public int Height;
         public int Quality;
+        public CameraIntrinsics Intrinsics;
+        public bool HasIntrinsics;
     }
 }

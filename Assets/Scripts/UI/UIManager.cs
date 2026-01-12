@@ -18,7 +18,7 @@ namespace StargazerProbe.UI
     {
         [Header("References")]
         [SerializeField] private IMUSensorManager sensorManager;
-        [SerializeField] private MobileCameraCapture cameraCapture;
+        private ICameraCapture cameraCapture;  // ファクトリーで作成するため、Serializeしない
         [SerializeField] private GrpcDataStreamer grpcDataStreamer;
         
         [Header("UI - Camera Preview")]
@@ -61,6 +61,13 @@ namespace StargazerProbe.UI
             Application.SetStackTraceLogType(LogType.Warning, StackTraceLogType.None);
             Application.SetStackTraceLogType(LogType.Error, StackTraceLogType.ScriptOnly);
 
+            // カメラキャプチャをファクトリーで作成
+            cameraCapture = CameraCaptureFactory.CreateCameraCapture(gameObject);
+            if (cameraCapture == null)
+            {
+                Debug.LogError("Failed to create camera capture");
+            }
+
             if (grpcDataStreamer == null)
             {
                 grpcDataStreamer = GetComponent<GrpcDataStreamer>();
@@ -78,6 +85,12 @@ namespace StargazerProbe.UI
 
             InitializeUI();
             SetupEventListeners();
+
+            // アプリ起動直後からカメラキャプチャを開始 (プレビュー表示のため)
+            if (cameraCapture != null)
+            {
+                cameraCapture.StartCapture();
+            }
         }
         
         private void InitializeUI()
@@ -188,11 +201,10 @@ namespace StargazerProbe.UI
 
             if (previewTexture is WebCamTexture webCam)
             {
-                // Remove AspectRatioFitter if exists, as we will handle layout manually
                 var fitter = cameraPreviewImage.GetComponent<AspectRatioFitter>();
                 if (fitter != null) Destroy(fitter);
 
-                // Reset Anchors to Center so sizeDelta works as absolute size
+                // アンカーを中央に設定してsizeDeltaで絶対サイズ指定
                 RectTransform rt = cameraPreviewImage.rectTransform;
                 rt.anchorMin = new Vector2(0.5f, 0.5f);
                 rt.anchorMax = new Vector2(0.5f, 0.5f);
@@ -202,10 +214,10 @@ namespace StargazerProbe.UI
                 int angle = webCam.videoRotationAngle;
                 bool isMirrored = webCam.videoVerticallyMirrored;
 
-                // 1. Rotation
+                // 回転
                 rt.localEulerAngles = new Vector3(0, 0, -angle);
 
-                // 2. Scale / Mirroring
+                // ミラーリング
                 Vector3 scale = Vector3.one;
                 if (isMirrored)
                 {
@@ -213,7 +225,7 @@ namespace StargazerProbe.UI
                 }
                 rt.localScale = scale;
 
-                // 3. Size (Aspect Ratio Fitting)
+                // アスペクト比を維持してサイズ調整
                 RectTransform parentRect = cameraPreviewImage.transform.parent as RectTransform;
                 if (parentRect == null) return;
 
@@ -224,7 +236,7 @@ namespace StargazerProbe.UI
                 float videoWidth = webCam.width;
                 float videoHeight = webCam.height;
 
-                // Visual dimensions after rotation
+                // 回転後の表示サイズ
                 float visualVideoWidth, visualVideoHeight;
                 if (Mathf.Abs(angle) == 90 || Mathf.Abs(angle) == 270)
                 {
@@ -237,13 +249,65 @@ namespace StargazerProbe.UI
                     visualVideoHeight = videoHeight;
                 }
 
-                // Fit Parent (Inside) - 画角を維持するため全体を表示する（黒帯が出る可能性があるが、映像は欠けない）
+                // 画面内に収める（黒帯あり）
                 float widthRatio = parentWidth / visualVideoWidth;
                 float heightRatio = parentHeight / visualVideoHeight;
                 
                 float ratio = Mathf.Min(widthRatio, heightRatio);
 
                 cameraPreviewImage.rectTransform.sizeDelta = new Vector2(videoWidth * ratio, videoHeight * ratio);
+            }
+            else
+            {
+                // ARFoundation: UI側で回転とアスペクト比を調整
+                var fitter = cameraPreviewImage.GetComponent<AspectRatioFitter>();
+                if (fitter != null) Destroy(fitter);
+
+                RectTransform rt = cameraPreviewImage.rectTransform;
+                rt.anchorMin = new Vector2(0.5f, 0.5f);
+                rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.anchoredPosition = Vector2.zero;
+
+                // 画面向きに応じて回転とミラーリングを調整
+                int angle = 0;
+                Vector3 scale = new Vector3(-1f, 1f, 1f); // X軸反転でミラーリング補正
+
+                if (Screen.orientation == ScreenOrientation.Portrait || Screen.orientation == ScreenOrientation.PortraitUpsideDown)
+                {
+                    angle = -90; // 縦向きは90度回転
+                }
+
+                rt.localEulerAngles = new Vector3(0, 0, -angle);
+                rt.localScale = scale;
+
+                RectTransform parentRect = cameraPreviewImage.transform.parent as RectTransform;
+                if (parentRect == null) return;
+
+                float parentWidth = parentRect.rect.width;
+                float parentHeight = parentRect.rect.height;
+
+                float texWidth = previewTexture.width;
+                float texHeight = previewTexture.height;
+
+                // 回転後の表示サイズ
+                float visualWidth, visualHeight;
+                if (Mathf.Abs(angle) == 90 || Mathf.Abs(angle) == 270)
+                {
+                    visualWidth = texHeight;
+                    visualHeight = texWidth;
+                }
+                else
+                {
+                    visualWidth = texWidth;
+                    visualHeight = texHeight;
+                }
+
+                float widthRatio = parentWidth / visualWidth;
+                float heightRatio = parentHeight / visualHeight;
+                float ratio = Mathf.Min(widthRatio, heightRatio);
+
+                cameraPreviewImage.rectTransform.sizeDelta = new Vector2(texWidth * ratio, texHeight * ratio);
             }
         }
 
@@ -281,7 +345,7 @@ namespace StargazerProbe.UI
         
         private void OnFrameCaptured(CameraFrameData frameData)
         {
-            // 表示更新は一定間隔で実施（UpdatePipelineStats）。
+            // フレームキャプチャ時のコールバック（統計情報の更新はUpdatePipelineStatsで実施）
         }
         
         private void OnStartStopButtonClicked()
@@ -306,11 +370,7 @@ namespace StargazerProbe.UI
                 grpcDataStreamer.StartStreaming("UI StartCapture");
             }
 
-            // カメラ開始
-            if (cameraCapture != null)
-            {
-                cameraCapture.StartCapture();
-            }
+            // カメラキャプチャはStart()で既に開始済み
             
             UpdateStartStopButton(true);
             if (recordingIndicator != null)
@@ -322,36 +382,13 @@ namespace StargazerProbe.UI
         
         private void StopCapture()
         {
-            // カメラ停止
-            if (cameraCapture != null)
-            {
-                cameraCapture.StopCapture();
-            }
-
+            // gRPC送信のみ停止、カメラキャプチャとプレビューは継続
             if (grpcDataStreamer != null)
             {
                 grpcDataStreamer.StopStreaming("UI StopCapture", disableAutoResume: true);
             }
 
             StopConnectionMonitoring();
-
-            // Preview Reset
-            if (cameraPreviewImage != null)
-            {
-                cameraPreviewImage.texture = null;
-                cameraPreviewImage.color = new Color(0.2f, 0.2f, 0.2f);
-                
-                // Reset Transforms
-                cameraPreviewImage.rectTransform.localEulerAngles = Vector3.zero;
-                cameraPreviewImage.rectTransform.localScale = Vector3.one;
-                
-                // Reset Layout to Stretch/Fill
-                cameraPreviewImage.rectTransform.anchorMin = Vector2.zero;
-                cameraPreviewImage.rectTransform.anchorMax = Vector2.one;
-                cameraPreviewImage.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-                cameraPreviewImage.rectTransform.anchoredPosition = Vector2.zero;
-                cameraPreviewImage.rectTransform.sizeDelta = Vector2.zero;
-            }
             
             isRunning = false;
             UpdateStartStopButton(false);
@@ -521,8 +558,6 @@ namespace StargazerProbe.UI
                     break;
             }
         }
-        
-        // OnDestroy moved above (also disposes preview material)
     }
     
     /// <summary>

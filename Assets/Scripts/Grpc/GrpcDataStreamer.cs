@@ -21,7 +21,7 @@ namespace StargazerProbe.Grpc
     {
         [Header("References")]
         [SerializeField] private IMUSensorManager sensorManager;
-        [SerializeField] private MobileCameraCapture cameraCapture;
+        private ICameraCapture cameraCapture; // モバイル/AR両対応のためInterfaceに変更
 
         [Header("Options")]
         [SerializeField] private string deviceIdOverride;
@@ -188,8 +188,22 @@ namespace StargazerProbe.Grpc
         {
             if (sensorManager == null)
                 sensorManager = FindAnyObjectByType<IMUSensorManager>();
+            
+            // ICameraCaptureの実装を検索（Factory生成のため動的に取得）
             if (cameraCapture == null)
-                cameraCapture = FindAnyObjectByType<MobileCameraCapture>();
+            {
+                cameraCapture = GetComponent<ICameraCapture>();
+                if (cameraCapture == null)
+                {
+                    var mobile = FindAnyObjectByType<MobileCameraCapture>();
+                    if (mobile != null) cameraCapture = mobile;
+                    else
+                    {
+                        var ar = FindAnyObjectByType<ARFoundationCameraCapture>();
+                        if (ar != null) cameraCapture = ar;
+                    }
+                }
+            }
         }
 
         public async void StartStreaming(string reason = null)
@@ -228,7 +242,8 @@ namespace StargazerProbe.Grpc
             string host = config != null ? config.Server.IpAddress : "127.0.0.1";
             int port = config != null ? config.Server.Port : 50051;
 
-            Debug.Log($"[GrpcDataStreamer] StartStreaming -> {host}:{port} reason={(string.IsNullOrWhiteSpace(reason) ? "(none)" : reason)} camera={(cameraCapture == null ? "null" : $"{cameraCapture.name}#{cameraCapture.GetInstanceID()} capturing={cameraCapture.IsCapturing}")}");
+            var captureObj = cameraCapture as UnityEngine.Object;
+            Debug.Log($"[GrpcDataStreamer] StartStreaming -> {host}:{port} reason={(string.IsNullOrWhiteSpace(reason) ? "(none)" : reason)} camera={(cameraCapture == null ? "null" : $"{(captureObj != null ? captureObj.name : cameraCapture.GetType().Name)} capturing={cameraCapture.IsCapturing}")}");
 
             try
             {
