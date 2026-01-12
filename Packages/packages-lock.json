@@ -1,5 +1,12 @@
 {
   "dependencies": {
+    "com.cysharp.yetanotherhttphandler": {
+      "version": "https://github.com/Cysharp/YetAnotherHttpHandler.git?path=src/YetAnotherHttpHandler#1.11.4",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "5719afbc6b1d8cfa8729f24f0fe6a0e9dfa70f3a"
+    },
     "com.unity.ai.navigation": {
       "version": "2.0.6",
       "depth": 0,

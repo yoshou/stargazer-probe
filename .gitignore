@@ -101,14 +101,20 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
-# NuGet packages (for gRPC)
-/[Pp]ackages/
+# NuGet (classic) packages folder.
+# Note: Do NOT ignore Unity's `Packages/` (it contains `manifest.json`).
+/packages/
+!/Packages/
+
 *.nupkg
 *.snupkg
 
-# gRPC Generated files
-Assets/Scripts/gRPC/Generated/
-*.pb.cs
+# NuGetForUnity cache/temp (safe to ignore if created)
+/Assets/NuGet/Temp/
+/Assets/NuGet/Cache/
+
+# gRPC Generated files: commit them (hand-edited from proto, not auto-generated at build time)
+# Assets/Scripts/Grpc/Generated/ -- DO track this
 
 # Android Studio
 *.iml
@@ -124,3 +130,8 @@ output.json
 *.ipa
 /[Bb]uild/
 /[Bb]uilds/
+
+# NuGetForUnity: only track packages.config; binaries are auto-restored
+/Assets/NuGet/
+/Assets/NuGet.config
+/Assets/Packages/

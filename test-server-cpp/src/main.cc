@@ -16,7 +16,7 @@ public:
   grpc::Status StreamData(
       grpc::ServerContext* context,
       grpc::ServerReaderWriter<stargazer::DataResponse, stargazer::DataPacket>* stream) override {
-    (void)context;
+    std::cout << "[StreamData] client connected. peer=" << (context ? context->peer() : "(null)") << std::endl;
 
     stargazer::DataPacket packet;
     int32_t received = 0;

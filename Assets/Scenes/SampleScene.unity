@@ -9132,6 +9132,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sensorManager: {fileID: 681902207}
   cameraCapture: {fileID: 1692448540}
+  grpcDataStreamer: {fileID: 0}
   cameraPreviewImage: {fileID: 1063328737}
   connectionStatusText: {fileID: 1307054021}
   fpsCounterText: {fileID: 1574226628}

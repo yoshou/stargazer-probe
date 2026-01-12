@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.cysharp.yetanotherhttphandler": "https://github.com/Cysharp/YetAnotherHttpHandler.git?path=src/YetAnotherHttpHandler#1.11.4",
     "com.unity.ai.navigation": "2.0.6",
     "com.unity.device-simulator.devices": "1.0.1",
     "com.unity.ide.rider": "3.0.31",

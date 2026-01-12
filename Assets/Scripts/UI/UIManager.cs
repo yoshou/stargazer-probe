@@ -4,6 +4,7 @@ using TMPro;
 using StargazerProbe.Sensors;
 using StargazerProbe.Camera;
 using StargazerProbe.Config;
+using StargazerProbe.Grpc;
 using System;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -18,6 +19,7 @@ namespace StargazerProbe.UI
         [Header("References")]
         [SerializeField] private IMUSensorManager sensorManager;
         [SerializeField] private MobileCameraCapture cameraCapture;
+        [SerializeField] private GrpcDataStreamer grpcDataStreamer;
         
         [Header("UI - Camera Preview")]
         [SerializeField] private RawImage cameraPreviewImage;
@@ -52,6 +54,28 @@ namespace StargazerProbe.UI
         private void Start()
         {
             config = SystemConfig.Instance;
+
+            // Reduce Android logcat noise: remove stack traces for normal logs/warnings.
+            // (Those extra "Namespace.Class:Method" lines come from Unity stack trace settings.)
+            Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
+            Application.SetStackTraceLogType(LogType.Warning, StackTraceLogType.None);
+            Application.SetStackTraceLogType(LogType.Error, StackTraceLogType.ScriptOnly);
+
+            if (grpcDataStreamer == null)
+            {
+                grpcDataStreamer = GetComponent<GrpcDataStreamer>();
+                if (grpcDataStreamer == null)
+                {
+                    grpcDataStreamer = FindAnyObjectByType<GrpcDataStreamer>();
+                }
+
+                // If not found in scene, add it to this GameObject so gRPC is never silently disabled.
+                if (grpcDataStreamer == null)
+                {
+                    grpcDataStreamer = gameObject.AddComponent<GrpcDataStreamer>();
+                }
+            }
+
             InitializeUI();
             SetupEventListeners();
         }
@@ -267,6 +291,11 @@ namespace StargazerProbe.UI
             isRunning = true;
             StartConnectionMonitoring();
 
+            if (grpcDataStreamer != null)
+            {
+                grpcDataStreamer.StartStreaming("UI StartCapture");
+            }
+
             // カメラ開始
             if (cameraCapture != null)
             {
@@ -287,6 +316,11 @@ namespace StargazerProbe.UI
             if (cameraCapture != null)
             {
                 cameraCapture.StopCapture();
+            }
+
+            if (grpcDataStreamer != null)
+            {
+                grpcDataStreamer.StopStreaming("UI StopCapture", disableAutoResume: true);
             }
 
             StopConnectionMonitoring();
