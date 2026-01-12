@@ -146,10 +146,24 @@ namespace StargazerProbe.UI
                 {
                     fpsCounterText.text = $"FPS: {fps:F1}";
                 }
+
+                UpdatePipelineStats();
                 
                 frameCount = 0;
                 lastFpsUpdate = Time.time;
             }
+        }
+
+        private void UpdatePipelineStats()
+        {
+            if (queueSizeText == null)
+                return;
+
+            // レイアウト崩れを避けるため、表示は短く保つ。
+            // ここで表示している Drop は「送信キューが上限を超えたため古いパケットを捨てた回数」。
+            // ネットワーク切断・送信エラー（SendErrors）とは別の指標。
+            int dropped = grpcDataStreamer != null ? grpcDataStreamer.FramesDroppedQueueOverflow : 0;
+            queueSizeText.text = $"Drop: {dropped}";
         }
         
         private void UpdateCameraPreview()
@@ -267,11 +281,7 @@ namespace StargazerProbe.UI
         
         private void OnFrameCaptured(CameraFrameData frameData)
         {
-            // キューサイズを更新（後でバッファ実装時に使用）
-            if (queueSizeText != null)
-            {
-                queueSizeText.text = $"Queue: 0";
-            }
+            // 表示更新は一定間隔で実施（UpdatePipelineStats）。
         }
         
         private void OnStartStopButtonClicked()

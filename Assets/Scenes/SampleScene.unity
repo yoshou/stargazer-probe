@@ -7870,6 +7870,8 @@ MonoBehaviour:
   jpegQuality: 75
   autoAdjustQuality: 1
   maxSkipFrames: 3
+  maxPendingEncodes: 2
+  encoderBufferCount: 3
 --- !u!4 &1692448541
 Transform:
   m_ObjectHideFlags: 0

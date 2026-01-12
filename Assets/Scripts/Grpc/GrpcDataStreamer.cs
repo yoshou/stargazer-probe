@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -9,7 +10,12 @@ using StargazerProbe.Sensors;
 namespace StargazerProbe.Grpc
 {
     /// <summary>
-    /// カメラフレーム + 最新IMUをまとめて gRPC (Duplex Streaming) で送信する
+    /// カメラフレーム + 最新IMUをまとめて gRPC (Duplex Streaming) で送信する。
+    /// 
+    /// 送信は「遅延許容・ドロップ最小化」方針：
+    /// - OnFrameCaptured では送信せず、送信キューに積むだけ
+    /// - バックグラウンド送信ループが順番に SendAsync する
+    /// - キューが上限を超えた場合のみ、古いパケットから捨てる（メモリ上限を守るため）
     /// </summary>
     public class GrpcDataStreamer : MonoBehaviour
     {
@@ -25,10 +31,15 @@ namespace StargazerProbe.Grpc
         private CancellationTokenSource cts;
         private bool isStopping;
 
+        // 送信キュー：順序を保って送る。接続状況により滞留することがある。
+        private readonly ConcurrentQueue<Stargazer.DataPacket> sendQueue = new ConcurrentQueue<Stargazer.DataPacket>();
+        private readonly SemaphoreSlim sendSignal = new SemaphoreSlim(0);
+        private CancellationTokenSource sendLoopCts;
+        private Task sendLoopTask;
+        private int queuedPackets;
+
         private SensorData lastSensor;
         private bool hasSensor;
-
-        private readonly SemaphoreSlim sendLock = new SemaphoreSlim(1, 1);
 
         private bool wasStreamingBeforePause;
         private bool resumePending;
@@ -45,6 +56,19 @@ namespace StargazerProbe.Grpc
         private int responsesFailed;
         private float lastResponseSummaryLogTime;
 
+        // Drop 指標：実際に捨てるのは FramesDroppedQueueOverflow（バッファ上限超過時）のみ。
+        private int framesDroppedQueueOverflow;
+
+        public int PendingSendOps => Volatile.Read(ref queuedPackets);
+        public int FramesCaptured => framesCaptured;
+        public int FramesSent => framesSent;
+        public int FramesSkippedNotConnected => framesSkippedNotConnected;
+        public int FramesSkippedStopping => framesSkippedStopping;
+        public int SendErrors => sendErrors;
+        public int FramesDroppedQueueOverflow => framesDroppedQueueOverflow;
+        public int ResponsesReceived => responsesReceived;
+        public int ResponsesFailed => responsesFailed;
+
         public event Action<GrpcConnectionState> OnGrpcStateChanged;
 
         private void Awake()
@@ -56,6 +80,81 @@ namespace StargazerProbe.Grpc
             grpcClient = new GrpcStreamClient(SynchronizationContext.Current);
             grpcClient.OnStateChanged += state => OnGrpcStateChanged?.Invoke(state);
             grpcClient.OnResponse += OnGrpcResponse;
+        }
+
+        private void StartSendLoop()
+        {
+            if (sendLoopTask != null && !sendLoopTask.IsCompleted)
+                return;
+
+            sendLoopCts?.Cancel();
+            sendLoopCts?.Dispose();
+            sendLoopCts = new CancellationTokenSource();
+
+            // Reset queue accounting
+            while (sendQueue.TryDequeue(out _)) { }
+            Interlocked.Exchange(ref queuedPackets, 0);
+
+            sendLoopTask = Task.Run(() => SendLoopAsync(sendLoopCts.Token));
+        }
+
+        private void StopSendLoop()
+        {
+            try
+            {
+                sendLoopCts?.Cancel();
+                try { sendSignal.Release(); } catch { }
+            }
+            catch { }
+
+            // Drain queue
+            while (sendQueue.TryDequeue(out _)) { }
+            Interlocked.Exchange(ref queuedPackets, 0);
+
+            sendLoopCts?.Dispose();
+            sendLoopCts = null;
+            sendLoopTask = null;
+        }
+
+        private async Task SendLoopAsync(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    await sendSignal.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                if (cancellationToken.IsCancellationRequested)
+                    break;
+
+                // If not connected yet, wait a little and retry.
+                if (grpcClient == null || !grpcClient.IsConnected)
+                {
+                    try { await Task.Delay(10, cancellationToken).ConfigureAwait(false); } catch { }
+                    continue;
+                }
+
+                if (!sendQueue.TryDequeue(out var packet) || packet == null)
+                    continue;
+
+                Interlocked.Decrement(ref queuedPackets);
+
+                try
+                {
+                    await grpcClient.SendAsync(packet).ConfigureAwait(false);
+                    Interlocked.Increment(ref framesSent);
+                }
+                catch (Exception ex)
+                {
+                    Interlocked.Increment(ref sendErrors);
+                    Debug.LogError($"[GrpcDataStreamer] Send failed: {ex.Message}");
+                }
+            }
         }
 
         private void OnGrpcResponse(Stargazer.DataResponse resp)
@@ -118,6 +217,8 @@ namespace StargazerProbe.Grpc
 
             cts = new CancellationTokenSource();
 
+            StartSendLoop();
+
             if (sensorManager != null)
                 sensorManager.OnSensorDataUpdated += OnSensorDataUpdated;
 
@@ -167,6 +268,7 @@ namespace StargazerProbe.Grpc
                     cameraCapture.OnFrameCaptured -= OnFrameCaptured;
 
                 localCts.Cancel();
+                StopSendLoop();
                 await grpcClient.DisconnectAsync();
             }
             finally
@@ -204,45 +306,31 @@ namespace StargazerProbe.Grpc
                 return;
             }
 
-            await sendLock.WaitAsync();
-            try
+            var packet = new Stargazer.DataPacket
             {
-                // Re-check after acquiring the lock to avoid sending during stop/disconnect.
-                if (cts == null || isStopping || grpcClient == null || !grpcClient.IsConnected)
-                {
-                    if (isStopping)
-                        framesSkippedStopping++;
-                    else
-                        framesSkippedNotConnected++;
+                Timestamp = frameData.Timestamp,
+                DeviceId = string.IsNullOrWhiteSpace(deviceIdOverride) ? SystemInfo.deviceUniqueIdentifier : deviceIdOverride,
+                Camera = ProtoConverters.ToProto(frameData)
+            };
 
-                    LogFrameStatsThrottled("skipping(post-lock)");
-                    return;
-                }
+            if (hasSensor)
+                packet.Sensor = ProtoConverters.ToProto(lastSensor);
 
-                var packet = new Stargazer.DataPacket
-                {
-                    Timestamp = frameData.Timestamp,
-                    DeviceId = string.IsNullOrWhiteSpace(deviceIdOverride) ? SystemInfo.deviceUniqueIdentifier : deviceIdOverride,
-                    Camera = ProtoConverters.ToProto(frameData)
-                };
+            int maxBuffer = config != null && config.Advanced != null ? Mathf.Max(1, config.Advanced.MaxBufferSize) : 100;
 
-                if (hasSensor)
-                    packet.Sensor = ProtoConverters.ToProto(lastSensor);
+            sendQueue.Enqueue(packet);
+            int q = Interlocked.Increment(ref queuedPackets);
+            sendSignal.Release();
 
-                await grpcClient.SendAsync(packet);
-                framesSent++;
-                LogFrameStatsThrottled("sent");
-            }
-            catch (Exception ex)
+            // If queue grows beyond cap, drop oldest packets (delay is allowed, but memory isn't).
+            while (q > maxBuffer && sendQueue.TryDequeue(out _))
             {
-                sendErrors++;
-                Debug.LogError($"[GrpcDataStreamer] Send failed: {ex.Message}");
-                LogFrameStatsThrottled("send-error");
+                q = Interlocked.Decrement(ref queuedPackets);
+                framesDroppedQueueOverflow++;
             }
-            finally
-            {
-                sendLock.Release();
-            }
+
+            // Keep stats logs consistent
+            LogFrameStatsThrottled("enqueued");
         }
 
         private void LogFrameStatsThrottled(string tag)

@@ -1,11 +1,20 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 
 namespace StargazerProbe.Camera
 {
     /// <summary>
-    /// モバイルカメラのキャプチャとJPEG圧縮を管理するクラス
+    /// モバイルカメラのキャプチャとJPEG圧縮を管理するクラス。
+    /// 
+    /// - ピクセル取得はメインスレッド（WebCamTextureの制約）
+    /// - JPEGエンコードはバックグラウンドで実行して、メインスレッドのフレーム落ちを抑える
+    /// - エンコードが追いつかない場合はフレームを間引く（遅延ではなくFPS維持を優先）
     /// </summary>
     public class MobileCameraCapture : MonoBehaviour
     {
@@ -20,15 +29,37 @@ namespace StargazerProbe.Camera
         
         [Header("Performance")]
         [SerializeField] private int maxSkipFrames = 3;
+
+        [Tooltip("JPEGエンコードのバックログ上限。超えたらフレームを間引く")]
+        [SerializeField] private int maxPendingEncodes = 2;
+
+        [Tooltip("エンコード用ピクセルバッファ数。多いほどGCを抑えつつ追従しやすいがメモリを使う")]
+        [SerializeField] private int encoderBufferCount = 3;
         
         // カメラ
         private WebCamTexture webCamTexture;
-        private Texture2D captureTexture;
+
+        private int bufferWidth;
+        private int bufferHeight;
+
+        private readonly object bufferLock = new object();
+        private Queue<Color32[]> availableBuffers;
+
+        private readonly ConcurrentQueue<EncodeJob> encodeQueue = new ConcurrentQueue<EncodeJob>();
+        private readonly SemaphoreSlim encodeSignal = new SemaphoreSlim(0);
+        private CancellationTokenSource encodeCts;
+        private Task encodeTask;
+        private int pendingEncodes;
+
+        private SynchronizationContext unityContext;
         
         // 状態
         public bool IsCapturing { get; private set; }
         public float ActualFPS { get; private set; }
         public int SkippedFrames { get; private set; }
+
+        public int PendingEncodes => Volatile.Read(ref pendingEncodes);
+        public int MaxPendingEncodes => maxPendingEncodes;
         
         // イベント
         public event Action<CameraFrameData> OnFrameCaptured;
@@ -39,12 +70,12 @@ namespace StargazerProbe.Camera
         // 内部変数
         private float captureInterval;
         private float lastCaptureTime;
-        private bool isProcessing;
         private int consecutiveSkips;
         
         private void Awake()
         {
             captureInterval = 1f / targetFPS;
+            unityContext = SynchronizationContext.Current;
         }
         
         /// <summary>
@@ -88,11 +119,18 @@ namespace StargazerProbe.Camera
             // WebCamTextureを初期化
             webCamTexture = new WebCamTexture(deviceName, width, height, targetFPS);
             webCamTexture.Play();
-            
-            // カメラが起動するまで待機
-            yield return new WaitForSeconds(1f);
-            
-            if (!webCamTexture.isPlaying)
+
+            // カメラが起動し、解像度が確定するまで待機
+            const float timeoutSeconds = 3f;
+            float startWait = Time.realtimeSinceStartup;
+            while (webCamTexture != null && webCamTexture.isPlaying && (webCamTexture.width <= 16 || webCamTexture.height <= 16))
+            {
+                if (Time.realtimeSinceStartup - startWait > timeoutSeconds)
+                    break;
+                yield return null;
+            }
+
+            if (webCamTexture == null || !webCamTexture.isPlaying)
             {
                 Debug.LogError("Failed to start camera");
                 OnCaptureStartFailed?.Invoke("Failed to start camera");
@@ -100,10 +138,23 @@ namespace StargazerProbe.Camera
             }
             
             // キャプチャ用テクスチャを作成
-            captureTexture = new Texture2D(webCamTexture.width, webCamTexture.height, TextureFormat.RGB24, false);
+            int w = webCamTexture.width;
+            int h = webCamTexture.height;
+
+            bufferWidth = w;
+            bufferHeight = h;
+
+            int buffers = Mathf.Max(2, encoderBufferCount);
+            availableBuffers = new Queue<Color32[]>(buffers);
+            for (int i = 0; i < buffers; i++)
+            {
+                availableBuffers.Enqueue(new Color32[w * h]);
+            }
+
+            StartEncoderLoop();
             
             IsCapturing = true;
-            lastCaptureTime = Time.time;
+            lastCaptureTime = Time.unscaledTime;
             
             Debug.Log($"Camera started: {webCamTexture.width}x{webCamTexture.height} @ {targetFPS}fps");
             OnCaptureStarted?.Invoke();
@@ -113,22 +164,52 @@ namespace StargazerProbe.Camera
         {
             if (!IsCapturing || webCamTexture == null || !webCamTexture.isPlaying)
                 return;
+
+            // 画面回転などでカメラの実解像度が変わることがある。
+            // バッファが古いと内部で確保が走ったり、データが欠落するので作り直す。
+            // （この再構築は、エンコードループを停止→キューを排出→バッファを作り直す流れ。）
+            int w = webCamTexture.width;
+            int h = webCamTexture.height;
+            if (w > 16 && h > 16 && (w != bufferWidth || h != bufferHeight))
+            {
+                RebuildEncoderBuffers(w, h);
+            }
             
             // FPS計算
             ActualFPS = 1f / Time.deltaTime;
             
             // 指定された間隔でキャプチャ
-            if (Time.time - lastCaptureTime >= captureInterval)
+            if (Time.unscaledTime - lastCaptureTime >= captureInterval)
             {
                 CaptureFrame();
-                lastCaptureTime = Time.time;
+                lastCaptureTime = Time.unscaledTime;
             }
+        }
+
+        private void RebuildEncoderBuffers(int w, int h)
+        {
+            Debug.Log($"Camera resolution changed: {bufferWidth}x{bufferHeight} -> {w}x{h}. Rebuilding buffers.");
+
+            StopEncoderLoop();
+
+            bufferWidth = w;
+            bufferHeight = h;
+
+            int buffers = Mathf.Max(2, encoderBufferCount);
+            availableBuffers = new Queue<Color32[]>(buffers);
+            for (int i = 0; i < buffers; i++)
+            {
+                availableBuffers.Enqueue(new Color32[w * h]);
+            }
+
+            StartEncoderLoop();
         }
         
         private void CaptureFrame()
         {
-            // 前のフレームがまだ処理中の場合
-            if (isProcessing)
+            // エンコードが追いつかない場合は間引く（メインスレッドのFPS維持を優先）。
+            // ここで溜め続けると遅延が増えるだけでなく、メモリ増加やGC負荷につながる。
+            if (pendingEncodes >= maxPendingEncodes)
             {
                 consecutiveSkips++;
                 SkippedFrames++;
@@ -146,40 +227,134 @@ namespace StargazerProbe.Camera
                 }
                 return;
             }
-            
-            consecutiveSkips = 0;
-            StartCoroutine(ProcessFrame());
-        }
-        
-        private IEnumerator ProcessFrame()
-        {
-            isProcessing = true;
-            
-            double timestamp = Time.realtimeSinceStartup;
-            
-            // WebCamTextureからピクセルデータをコピー
-            captureTexture.SetPixels(webCamTexture.GetPixels());
-            captureTexture.Apply();
-            
-            // JPEG圧縮（メインスレッドで実行）
-            byte[] jpegData = captureTexture.EncodeToJPG(jpegQuality);
-            
-            // フレームデータを作成
-            CameraFrameData frameData = new CameraFrameData
+
+            Color32[] buffer = RentPixelBuffer();
+            if (buffer == null)
             {
-                Timestamp = timestamp,
-                ImageData = jpegData,
-                Width = captureTexture.width,
-                Height = captureTexture.height,
-                Quality = jpegQuality
-            };
-            
-            // イベント発火
-            OnFrameCaptured?.Invoke(frameData);
-            
-            isProcessing = false;
-            
-            yield return null;
+                consecutiveSkips++;
+                SkippedFrames++;
+                return;
+            }
+
+            consecutiveSkips = 0;
+
+            // WebCamTextureからのピクセル取得はメインスレッドでしか安全に呼べない。
+            buffer = webCamTexture.GetPixels32(buffer);
+
+            int w = webCamTexture.width;
+            int h = webCamTexture.height;
+
+            Interlocked.Increment(ref pendingEncodes);
+            encodeQueue.Enqueue(new EncodeJob
+            {
+                Timestamp = Time.realtimeSinceStartup,
+                Width = w,
+                Height = h,
+                Quality = jpegQuality,
+                Pixels = buffer
+            });
+            encodeSignal.Release();
+        }
+
+        private void StartEncoderLoop()
+        {
+            if (encodeTask != null && !encodeTask.IsCompleted)
+                return;
+
+            encodeCts?.Cancel();
+            encodeCts?.Dispose();
+            encodeCts = new CancellationTokenSource();
+
+            encodeTask = Task.Run(() => EncodeLoopAsync(encodeCts.Token));
+        }
+
+        private async Task EncodeLoopAsync(CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    await encodeSignal.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                if (!encodeQueue.TryDequeue(out var job))
+                    continue;
+
+                try
+                {
+                    // JPEGエンコード（重い処理）をバックグラウンドで実行
+                    byte[] jpegData = ImageConversion.EncodeArrayToJPG(
+                        job.Pixels,
+                        GraphicsFormat.R8G8B8A8_UNorm,
+                        (uint)job.Width,
+                        (uint)job.Height,
+                        0,
+                        job.Quality);
+
+                    var frameData = new CameraFrameData
+                    {
+                        Timestamp = job.Timestamp,
+                        ImageData = jpegData,
+                        Width = job.Width,
+                        Height = job.Height,
+                        Quality = job.Quality
+                    };
+
+                    PostToUnity(() => OnFrameCaptured?.Invoke(frameData));
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Camera encode failed: {ex.Message}");
+                }
+                finally
+                {
+                    ReturnPixelBuffer(job.Pixels);
+                    Interlocked.Decrement(ref pendingEncodes);
+                }
+            }
+        }
+
+        private void PostToUnity(Action action)
+        {
+            if (action == null)
+                return;
+
+            if (unityContext != null)
+            {
+                unityContext.Post(_ => action(), null);
+                return;
+            }
+
+            // Fallback
+            action();
+        }
+
+        private Color32[] RentPixelBuffer()
+        {
+            if (availableBuffers == null)
+                return null;
+
+            lock (bufferLock)
+            {
+                if (availableBuffers.Count == 0)
+                    return null;
+                return availableBuffers.Dequeue();
+            }
+        }
+
+        private void ReturnPixelBuffer(Color32[] buffer)
+        {
+            if (buffer == null || availableBuffers == null)
+                return;
+
+            lock (bufferLock)
+            {
+                availableBuffers.Enqueue(buffer);
+            }
         }
         
         /// <summary>
@@ -199,14 +374,44 @@ namespace StargazerProbe.Camera
                 webCamTexture = null;
             }
             
-            if (captureTexture != null)
-            {
-                Destroy(captureTexture);
-                captureTexture = null;
-            }
-            
             Debug.Log("Camera stopped");
             OnCaptureStopped?.Invoke();
+
+            StopEncoderLoop();
+        }
+
+        private void StopEncoderLoop()
+        {
+            try
+            {
+                encodeCts?.Cancel();
+                // WaitAsync中のスレッドを解除して終了を促す。
+                try { encodeSignal.Release(); } catch { }
+            }
+            catch { }
+
+            // できるだけ短時間だけ待って、停止中のカウンタ競合を減らす。
+            try
+            {
+                if (encodeTask != null)
+                {
+                    encodeTask.Wait(200);
+                }
+            }
+            catch { }
+
+            // キューに残ったジョブを排出して、借りたバッファを返却する。
+            while (encodeQueue.TryDequeue(out var job))
+            {
+                ReturnPixelBuffer(job.Pixels);
+            }
+
+            // 停止時はバックログをリセットする（エンコードタスクはキャンセル済み）。
+            Interlocked.Exchange(ref pendingEncodes, 0);
+
+            encodeCts?.Dispose();
+            encodeCts = null;
+            encodeTask = null;
         }
         
         /// <summary>
@@ -244,6 +449,15 @@ namespace StargazerProbe.Camera
         private void OnDestroy()
         {
             StopCapture();
+        }
+
+        private struct EncodeJob
+        {
+            public double Timestamp;
+            public int Width;
+            public int Height;
+            public int Quality;
+            public Color32[] Pixels;
         }
     }
     
