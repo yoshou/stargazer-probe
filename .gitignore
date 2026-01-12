@@ -135,3 +135,6 @@ output.json
 /Assets/NuGet/
 /Assets/NuGet.config
 /Assets/Packages/
+
+# TextMesh Pro: Auto-generated from Package Manager, no need to track
+/Assets/TextMesh Pro/
