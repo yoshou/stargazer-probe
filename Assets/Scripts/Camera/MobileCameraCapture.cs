@@ -32,6 +32,9 @@ namespace StargazerProbe.Camera
         
         // イベント
         public event Action<CameraFrameData> OnFrameCaptured;
+        public event Action OnCaptureStarted;
+        public event Action OnCaptureStopped;
+        public event Action<string> OnCaptureStartFailed;
         
         // 内部変数
         private float captureInterval;
@@ -65,6 +68,7 @@ namespace StargazerProbe.Camera
             if (devices.Length == 0)
             {
                 Debug.LogError("No camera devices found");
+                OnCaptureStartFailed?.Invoke("No camera devices found");
                 yield break;
             }
             
@@ -91,6 +95,7 @@ namespace StargazerProbe.Camera
             if (!webCamTexture.isPlaying)
             {
                 Debug.LogError("Failed to start camera");
+                OnCaptureStartFailed?.Invoke("Failed to start camera");
                 yield break;
             }
             
@@ -101,6 +106,7 @@ namespace StargazerProbe.Camera
             lastCaptureTime = Time.time;
             
             Debug.Log($"Camera started: {webCamTexture.width}x{webCamTexture.height} @ {targetFPS}fps");
+            OnCaptureStarted?.Invoke();
         }
         
         private void Update()
@@ -200,6 +206,7 @@ namespace StargazerProbe.Camera
             }
             
             Debug.Log("Camera stopped");
+            OnCaptureStopped?.Invoke();
         }
         
         /// <summary>

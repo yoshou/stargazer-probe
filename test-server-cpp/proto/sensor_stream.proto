@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package stargazer;
+
+service SensorStream {
+  rpc StreamData (stream DataPacket) returns (stream DataResponse);
+}
+
+message DataPacket {
+  double timestamp = 1;          // Unix time (seconds) or any sender clock
+  SensorData sensor = 2;         // IMU data
+  CameraFrame camera = 3;        // Camera frame
+  Pose pose = 4;                 // Optional pose
+  string device_id = 5;          // Device identifier
+}
+
+message SensorData {
+  Vector3 acceleration = 1;      // m/s^2
+  Vector3 gyroscope = 2;         // rad/s
+  Vector3 magnetometer = 3;      // uT
+  Vector3 gravity = 4;           // gravity direction
+}
+
+message CameraFrame {
+  bytes image_data = 1;          // JPEG bytes
+  int32 width = 2;
+  int32 height = 3;
+  int32 quality = 4;
+  double camera_timestamp = 5;
+}
+
+message Pose {
+  Vector3 position = 1;
+  Quaternion rotation = 2;
+}
+
+message Quaternion {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+  float w = 4;
+}
+
+message Vector3 {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+message DataResponse {
+  bool success = 1;
+  string message = 2;
+  int32 received_packets = 3;
+}

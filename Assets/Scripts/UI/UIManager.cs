@@ -4,6 +4,9 @@ using TMPro;
 using StargazerProbe.Sensors;
 using StargazerProbe.Camera;
 using StargazerProbe.Config;
+using System;
+using System.Net.Sockets;
+using System.Threading.Tasks;
 
 namespace StargazerProbe.UI
 {
@@ -38,13 +41,17 @@ namespace StargazerProbe.UI
         [Header("UI - Settings Panel")]
         [SerializeField] private GameObject settingsPanel;
         
+        private SystemConfig config;
         private bool isRunning = false;
+        private Coroutine connectionMonitorCoroutine;
+        private ConnectionState lastConnectionState = ConnectionState.Disconnected;
         private float fpsUpdateInterval = 0.5f;
         private float lastFpsUpdate;
         private int frameCount;
         
         private void Start()
         {
+            config = SystemConfig.Instance;
             InitializeUI();
             SetupEventListeners();
         }
@@ -62,8 +69,6 @@ namespace StargazerProbe.UI
             }
             UpdateConnectionStatus(ConnectionState.Disconnected);
             UpdateStartStopButton(false);
-            
-            Debug.Log("UI initialized");
         }
         
         private void SetupEventListeners()
@@ -259,21 +264,21 @@ namespace StargazerProbe.UI
         
         private void StartCapture()
         {
+            isRunning = true;
+            StartConnectionMonitoring();
+
             // カメラ開始
             if (cameraCapture != null)
             {
                 cameraCapture.StartCapture();
             }
             
-            isRunning = true;
             UpdateStartStopButton(true);
             if (recordingIndicator != null)
             {
                 recordingIndicator.enabled = true;
                 StartCoroutine(BlinkRecordingIndicator());
             }
-            
-            Debug.Log("Capture started");
         }
         
         private void StopCapture()
@@ -283,6 +288,8 @@ namespace StargazerProbe.UI
             {
                 cameraCapture.StopCapture();
             }
+
+            StopConnectionMonitoring();
 
             // Preview Reset
             if (cameraPreviewImage != null)
@@ -309,8 +316,97 @@ namespace StargazerProbe.UI
                 recordingIndicator.enabled = false;
             }
             StopAllCoroutines();
-            
-            Debug.Log("Capture stopped");
+        }
+
+        private void StartConnectionMonitoring()
+        {
+            if (connectionMonitorCoroutine != null)
+                return;
+
+            connectionMonitorCoroutine = StartCoroutine(ConnectionMonitorLoop());
+        }
+
+        private void StopConnectionMonitoring()
+        {
+            if (connectionMonitorCoroutine != null)
+            {
+                StopCoroutine(connectionMonitorCoroutine);
+                connectionMonitorCoroutine = null;
+            }
+
+            lastConnectionState = ConnectionState.Disconnected;
+            UpdateConnectionStatus(ConnectionState.Disconnected);
+        }
+
+        private System.Collections.IEnumerator ConnectionMonitorLoop()
+        {
+            while (isRunning)
+            {
+                string host = config != null ? config.Server.IpAddress : "127.0.0.1";
+                int port = config != null ? config.Server.Port : 50051;
+
+                bool reachable = false;
+                yield return TryTcpReachable(host, port, timeoutSeconds: 1.5f, result => reachable = result);
+
+                ConnectionState newState = reachable ? ConnectionState.Connected : ConnectionState.Disconnected;
+                
+                if (newState != lastConnectionState)
+                {
+                    Debug.Log($"[ConnectionMonitor] Connection state changed: {lastConnectionState} -> {newState}");
+                    lastConnectionState = newState;
+                    UpdateConnectionStatus(newState);
+                }
+
+                // Poll interval: 5秒（接続済み）、1秒（未接続）
+                yield return new WaitForSeconds(reachable ? 5f : 1f);
+            }
+
+            connectionMonitorCoroutine = null;
+        }
+
+        private static System.Collections.IEnumerator TryTcpReachable(string host, int port, float timeoutSeconds, Action<bool> onResult)
+        {
+            if (string.IsNullOrWhiteSpace(host) || port <= 0 || port > 65535)
+            {
+                onResult?.Invoke(false);
+                yield break;
+            }
+
+            Task<bool> task = Task.Run(async () =>
+            {
+                try
+                {
+                    using (var client = new TcpClient())
+                    {
+                        Task connectTask = client.ConnectAsync(host, port);
+                        Task timeoutTask = Task.Delay(TimeSpan.FromSeconds(timeoutSeconds));
+                        Task completed = await Task.WhenAny(connectTask, timeoutTask).ConfigureAwait(false);
+                        if (completed != connectTask)
+                            return false;
+
+                        await connectTask.ConfigureAwait(false);
+                        return client.Connected;
+                    }
+                }
+                catch
+                {
+                    return false;
+                }
+            });
+
+            float elapsed = 0f;
+            while (!task.IsCompleted)
+            {
+                yield return null;
+                elapsed += Time.deltaTime;
+                if (elapsed > timeoutSeconds + 1f)
+                {
+                    onResult?.Invoke(false);
+                    yield break;
+                }
+            }
+
+            onResult?.Invoke(task.Status == TaskStatus.RanToCompletion && task.Result);
         }
         
         private System.Collections.IEnumerator BlinkRecordingIndicator()
@@ -354,7 +450,6 @@ namespace StargazerProbe.UI
         
         private void OnSettingsButtonClicked()
         {
-            Debug.Log("Settings button clicked");
             if (settingsPanel != null)
             {
                 settingsPanel.SetActive(!settingsPanel.activeSelf);
