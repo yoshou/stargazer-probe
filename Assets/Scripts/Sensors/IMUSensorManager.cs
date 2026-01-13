@@ -41,7 +41,7 @@ namespace StargazerProbe.Sensors
         
         // Private Fields - Update Timing
         private float updateInterval;
-        private float lastUpdateTime;
+        private Coroutine sensorUpdateCoroutine;
 
         // Private Fields - Input System Sensors
     #if ENABLE_INPUT_SYSTEM
@@ -59,6 +59,7 @@ namespace StargazerProbe.Sensors
         private void Start()
         {
             InitializeSensors();
+            StartSensorUpdates();
         }
         
         private void InitializeSensors()
@@ -151,14 +152,33 @@ namespace StargazerProbe.Sensors
             Debug.Log($"IMU Sensors initialized - Sampling Rate: {samplingRate}Hz");
 #endif
         }
-        
-        private void Update()
+
+        private void StartSensorUpdates()
         {
-            // Update data at specified sampling rate
-            if (Time.time - lastUpdateTime >= updateInterval)
+            if (sensorUpdateCoroutine != null)
+            {
+                StopCoroutine(sensorUpdateCoroutine);
+            }
+            sensorUpdateCoroutine = StartCoroutine(SensorUpdateLoop());
+        }
+
+        private void StopSensorUpdates()
+        {
+            if (sensorUpdateCoroutine != null)
+            {
+                StopCoroutine(sensorUpdateCoroutine);
+                sensorUpdateCoroutine = null;
+            }
+        }
+
+        private System.Collections.IEnumerator SensorUpdateLoop()
+        {
+            var wait = new WaitForSeconds(updateInterval);
+            
+            while (true)
             {
                 UpdateSensorData();
-                lastUpdateTime = Time.time;
+                yield return wait;
             }
         }
         
@@ -244,6 +264,10 @@ namespace StargazerProbe.Sensors
             if (magneticFieldSensor != null) TrySetSamplingFrequency(magneticFieldSensor, samplingRate);
             if (gravitySensor != null) TrySetSamplingFrequency(gravitySensor, samplingRate);
 #endif
+            
+            // Restart coroutine with new interval
+            StartSensorUpdates();
+            
             Debug.Log($"Sampling rate changed to {samplingRate}Hz");
         }
         
@@ -298,6 +322,9 @@ namespace StargazerProbe.Sensors
         
         private void OnDestroy()
         {
+            // Stop sensor updates
+            StopSensorUpdates();
+            
             // Sensor cleanup
 #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
             if (accelerometer != null) InputSystem.DisableDevice(accelerometer);

@@ -20,9 +20,6 @@ namespace StargazerProbe.Grpc
     public class GrpcDataStreamer : MonoBehaviour
     {
         // Serialized Fields
-        [Header("References")]
-        [SerializeField] private IMUSensorManager sensorManager;
-
         [Header("Options")]
         [SerializeField] private string deviceIdOverride;
 
@@ -77,8 +74,6 @@ namespace StargazerProbe.Grpc
         private void Awake()
         {
             config = SystemConfig.Instance;
-
-            RefreshReferences();
 
             grpcClient = new GrpcStreamClient(SynchronizationContext.Current);
             grpcClient.OnStateChanged += state => OnGrpcStateChanged?.Invoke(state);
@@ -187,12 +182,6 @@ namespace StargazerProbe.Grpc
             }
         }
 
-        private void RefreshReferences()
-        {
-            if (sensorManager == null)
-                sensorManager = FindAnyObjectByType<IMUSensorManager>();
-        }
-
         public async void StartStreaming(string reason = null)
         {
             if (isPaused)
@@ -214,14 +203,9 @@ namespace StargazerProbe.Grpc
             responsesFailed = 0;
             lastResponseSummaryLogTime = 0f;
 
-            RefreshReferences();
-
             cts = new CancellationTokenSource();
 
             StartSendLoop();
-
-            if (sensorManager != null)
-                sensorManager.OnSensorDataUpdated += OnSensorDataUpdated;
 
             string host = config != null ? config.Server.IpAddress : "127.0.0.1";
             int port = config != null ? config.Server.Port : 50051;
@@ -259,9 +243,6 @@ namespace StargazerProbe.Grpc
 
             try
             {
-                if (sensorManager != null)
-                    sensorManager.OnSensorDataUpdated -= OnSensorDataUpdated;
-
                 localCts.Cancel();
                 StopSendLoop();
                 await grpcClient.DisconnectAsync();
@@ -280,7 +261,11 @@ namespace StargazerProbe.Grpc
             }
         }
 
-        private void OnSensorDataUpdated(SensorData data)
+        /// <summary>
+        /// Public method to receive sensor data from external sources
+        /// Called from UIManager when sensor data is updated
+        /// </summary>
+        public void UpdateSensorData(SensorData data)
         {
             lastSensor = data;
             hasSensor = true;
@@ -356,8 +341,6 @@ namespace StargazerProbe.Grpc
         private void OnDestroy()
         {
             Debug.Log("[GrpcDataStreamer] OnDestroy");
-            if (sensorManager != null)
-                sensorManager.OnSensorDataUpdated -= OnSensorDataUpdated;
 
             if (cts != null)
             {

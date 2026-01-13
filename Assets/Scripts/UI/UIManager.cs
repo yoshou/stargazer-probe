@@ -383,6 +383,12 @@ namespace StargazerProbe.UI
             {
                 magText.text = $"Mag:   {data.Magnetometer.x:F1}, {data.Magnetometer.y:F1}, {data.Magnetometer.z:F1}";
             }
+            
+            // Forward sensor data to GrpcDataStreamer
+            if (grpcDataStreamer != null)
+            {
+                grpcDataStreamer.UpdateSensorData(data);
+            }
         }
         
         private void OnFrameCaptured(CameraFrameData frameData)
