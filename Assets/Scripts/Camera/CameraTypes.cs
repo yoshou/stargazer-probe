@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 
 namespace StargazerProbe.Camera
 {
@@ -17,7 +18,23 @@ namespace StargazerProbe.Camera
     }
 
     /// <summary>
-    /// カメラフレームデータ
+    /// 生のカメラフレームデータ（エンコード前）
+    /// Captureから直接出力されるデータ
+    /// </summary>
+    [Serializable]
+    public struct RawCameraFrameData
+    {
+        public double Timestamp;
+        public int Width;
+        public int Height;
+        public Color32[] Pixels;
+        public CameraIntrinsics Intrinsics;
+        public System.Action<Color32[]> ReturnBufferCallback;  // バッファプーリング用
+    }
+
+    /// <summary>
+    /// エンコード済みカメラフレームデータ
+    /// Encoderから出力されるデータ
     /// </summary>
     [Serializable]
     public struct CameraFrameData

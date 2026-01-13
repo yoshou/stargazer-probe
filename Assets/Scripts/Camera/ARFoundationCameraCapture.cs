@@ -42,18 +42,12 @@ namespace StargazerProbe.Camera
         public bool IsCapturing { get; private set; }
         public float ActualFPS { get; private set; }
         public int SkippedFrames { get; private set; }
-        public int PendingEncodes => frameEncoder != null ? frameEncoder.PendingCount : 0;
-        public int MaxPendingEncodes => maxPendingEncodes;
         
         // イベント
-        public event Action<CameraFrameData> OnFrameCaptured;
+        public event Action<RawCameraFrameData> OnFrameCaptured;
         public event Action OnCaptureStarted;
         public event Action OnCaptureStopped;
         public event Action<string> OnCaptureStartFailed;
-        
-        private SynchronizationContext unityContext;
-
-        private CameraFrameEncoder frameEncoder;
         
         // 内部変数
         private float captureInterval;
@@ -73,10 +67,6 @@ namespace StargazerProbe.Camera
         private void Awake()
         {
             captureInterval = 1f / targetFPS;
-            unityContext = SynchronizationContext.Current;
-
-            frameEncoder = new CameraFrameEncoder(unityContext);
-            frameEncoder.OnFrameEncoded += frameData => OnFrameCaptured?.Invoke(frameData);
             
             // ARCameraManagerを自動検索
             if (arCameraManager == null)
@@ -169,9 +159,6 @@ namespace StargazerProbe.Camera
 
             // フレーム受信イベントを登録
             arCameraManager.frameReceived += OnCameraFrameReceived;
-
-            // エンコーダーを開始
-            frameEncoder?.Start();
             
             IsCapturing = true;
             lastCaptureTime = Time.unscaledTime;
@@ -200,26 +187,6 @@ namespace StargazerProbe.Camera
         {
             try
             {
-                // エンコードが追いつかない場合は間引く
-                if (PendingEncodes >= maxPendingEncodes)
-                {
-                    consecutiveSkips++;
-                    SkippedFrames++;
-                    
-                    if (consecutiveSkips >= maxSkipFrames)
-                    {
-                        Debug.LogWarning($"[ARFoundationCameraCapture] Skipped {consecutiveSkips} consecutive frames");
-                        
-                        // 自動品質調整
-                        if (autoAdjustQuality && jpegQuality > 50)
-                        {
-                            jpegQuality = Mathf.Max(50, jpegQuality - 10);
-                            Debug.Log($"[ARFoundationCameraCapture] Auto-adjusted JPEG quality to {jpegQuality}");
-                        }
-                    }
-                    return;
-                }
-                
                 consecutiveSkips = 0;
                 
                 // カメラ画像を取得
@@ -264,14 +231,16 @@ namespace StargazerProbe.Camera
                     // UIプレビュー用テクスチャを更新（メインスレッド）
                     UpdatePreviewTexture(image.width, image.height, pixels);
                     
-                    frameEncoder?.TryEnqueue(
-                        Time.realtimeSinceStartup,
-                        image.width,
-                        image.height,
-                        jpegQuality,
-                        pixels,
-                        hasIntrinsics ? currentIntrinsics : default,
-                        null);
+                    // 生データをイベントで発行
+                    OnFrameCaptured?.Invoke(new RawCameraFrameData
+                    {
+                        Timestamp = Time.realtimeSinceStartup,
+                        Width = image.width,
+                        Height = image.height,
+                        Pixels = pixels,
+                        Intrinsics = hasIntrinsics ? currentIntrinsics : default,
+                        ReturnBufferCallback = null  // ARFoundationはバッファプーリングなし
+                    });
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -343,8 +312,6 @@ namespace StargazerProbe.Camera
                 arCameraManager.frameReceived -= OnCameraFrameReceived;
             }
 
-            frameEncoder?.Stop();
-
             Debug.Log("AR Camera stopped");
             OnCaptureStopped?.Invoke();
         }
@@ -397,12 +364,6 @@ namespace StargazerProbe.Camera
         private void OnDestroy()
         {
             StopCapture();
-
-            if (frameEncoder != null)
-            {
-                frameEncoder.Dispose();
-                frameEncoder = null;
-            }
         }
     }
 }

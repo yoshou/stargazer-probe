@@ -42,19 +42,14 @@ namespace StargazerProbe.Camera
 
         private readonly object bufferLock = new object();
         private Queue<Color32[]> availableBuffers;
-
-        private CameraFrameEncoder frameEncoder;
         
         // 状態
         public bool IsCapturing { get; private set; }
         public float ActualFPS { get; private set; }
         public int SkippedFrames { get; private set; }
-
-        public int PendingEncodes => frameEncoder != null ? frameEncoder.PendingCount : 0;
-        public int MaxPendingEncodes => maxPendingEncodes;
         
         // イベント
-        public event Action<CameraFrameData> OnFrameCaptured;
+        public event Action<RawCameraFrameData> OnFrameCaptured;
         public event Action OnCaptureStarted;
         public event Action OnCaptureStopped;
         public event Action<string> OnCaptureStartFailed;
@@ -141,13 +136,6 @@ namespace StargazerProbe.Camera
             {
                 availableBuffers.Enqueue(new Color32[w * h]);
             }
-
-            if (frameEncoder == null)
-            {
-                frameEncoder = new CameraFrameEncoder(SynchronizationContext.Current);
-                frameEncoder.OnFrameEncoded += frameData => OnFrameCaptured?.Invoke(frameData);
-            }
-            frameEncoder.Start();
             
             IsCapturing = true;
             lastCaptureTime = Time.unscaledTime;
@@ -199,27 +187,6 @@ namespace StargazerProbe.Camera
         
         private void CaptureFrame()
         {
-            // エンコードが追いつかない場合は間引く（メインスレッドのFPS維持を優先）。
-            // ここで溜め続けると遅延が増えるだけでなく、メモリ増加やGC負荷につながる。
-            if (PendingEncodes >= maxPendingEncodes)
-            {
-                consecutiveSkips++;
-                SkippedFrames++;
-                
-                if (consecutiveSkips >= maxSkipFrames)
-                {
-                    Debug.LogWarning($"Skipped {consecutiveSkips} consecutive frames");
-                    
-                    // 自動品質調整
-                    if (autoAdjustQuality && jpegQuality > 50)
-                    {
-                        jpegQuality = Mathf.Max(50, jpegQuality - 10);
-                        Debug.Log($"Auto-adjusted JPEG quality to {jpegQuality}");
-                    }
-                }
-                return;
-            }
-
             Color32[] buffer = RentPixelBuffer();
             if (buffer == null)
             {
@@ -236,23 +203,16 @@ namespace StargazerProbe.Camera
             int w = webCamTexture.width;
             int h = webCamTexture.height;
 
-            if (frameEncoder == null)
+            // 生データをイベントで発行
+            OnFrameCaptured?.Invoke(new RawCameraFrameData
             {
-                ReturnPixelBuffer(buffer);
-                return;
-            }
-
-            if (!frameEncoder.TryEnqueue(
-                    Time.realtimeSinceStartup,
-                    w,
-                    h,
-                    jpegQuality,
-                    buffer,
-                    default,
-                    ReturnPixelBuffer))
-            {
-                ReturnPixelBuffer(buffer);
-            }
+                Timestamp = Time.realtimeSinceStartup,
+                Width = w,
+                Height = h,
+                Pixels = buffer,
+                Intrinsics = default,  // MobileCameraCaptureは内部パラメータを取得しない
+                ReturnBufferCallback = ReturnPixelBuffer
+            });
         }
 
         private Color32[] RentPixelBuffer()
@@ -303,8 +263,6 @@ namespace StargazerProbe.Camera
             
             Debug.Log("Camera stopped");
             OnCaptureStopped?.Invoke();
-
-            frameEncoder?.Stop();
         }
         
         /// <summary>
@@ -342,12 +300,6 @@ namespace StargazerProbe.Camera
         private void OnDestroy()
         {
             StopCapture();
-
-            if (frameEncoder != null)
-            {
-                frameEncoder.Dispose();
-                frameEncoder = null;
-            }
         }
     }
 }

@@ -21,7 +21,6 @@ namespace StargazerProbe.Grpc
     {
         [Header("References")]
         [SerializeField] private IMUSensorManager sensorManager;
-        private ICameraCapture cameraCapture; // モバイル/AR両対応のためInterfaceに変更
 
         [Header("Options")]
         [SerializeField] private string deviceIdOverride;
@@ -188,22 +187,6 @@ namespace StargazerProbe.Grpc
         {
             if (sensorManager == null)
                 sensorManager = FindAnyObjectByType<IMUSensorManager>();
-            
-            // ICameraCaptureの実装を検索（Factory生成のため動的に取得）
-            if (cameraCapture == null)
-            {
-                cameraCapture = GetComponent<ICameraCapture>();
-                if (cameraCapture == null)
-                {
-                    var mobile = FindAnyObjectByType<MobileCameraCapture>();
-                    if (mobile != null) cameraCapture = mobile;
-                    else
-                    {
-                        var ar = FindAnyObjectByType<ARFoundationCameraCapture>();
-                        if (ar != null) cameraCapture = ar;
-                    }
-                }
-            }
         }
 
         public async void StartStreaming(string reason = null)
@@ -236,14 +219,10 @@ namespace StargazerProbe.Grpc
             if (sensorManager != null)
                 sensorManager.OnSensorDataUpdated += OnSensorDataUpdated;
 
-            if (cameraCapture != null)
-                cameraCapture.OnFrameCaptured += OnFrameCaptured;
-
             string host = config != null ? config.Server.IpAddress : "127.0.0.1";
             int port = config != null ? config.Server.Port : 50051;
 
-            var captureObj = cameraCapture as UnityEngine.Object;
-            Debug.Log($"[GrpcDataStreamer] StartStreaming -> {host}:{port} reason={(string.IsNullOrWhiteSpace(reason) ? "(none)" : reason)} camera={(cameraCapture == null ? "null" : $"{(captureObj != null ? captureObj.name : cameraCapture.GetType().Name)} capturing={cameraCapture.IsCapturing}")}");
+            Debug.Log($"[GrpcDataStreamer] StartStreaming -> {host}:{port} reason={(string.IsNullOrWhiteSpace(reason) ? "(none)" : reason)}");
 
             try
             {
@@ -279,9 +258,6 @@ namespace StargazerProbe.Grpc
                 if (sensorManager != null)
                     sensorManager.OnSensorDataUpdated -= OnSensorDataUpdated;
 
-                if (cameraCapture != null)
-                    cameraCapture.OnFrameCaptured -= OnFrameCaptured;
-
                 localCts.Cancel();
                 StopSendLoop();
                 await grpcClient.DisconnectAsync();
@@ -304,6 +280,15 @@ namespace StargazerProbe.Grpc
         {
             lastSensor = data;
             hasSensor = true;
+        }
+
+        /// <summary>
+        /// 外部からカメラフレームデータを受け取るための公開メソッド
+        /// UIManagerからコールバックチェーン経由で呼ばれる
+        /// </summary>
+        public void SendFrameData(CameraFrameData frameData)
+        {
+            OnFrameCaptured(frameData);
         }
 
         private void OnFrameCaptured(CameraFrameData frameData)
@@ -369,9 +354,6 @@ namespace StargazerProbe.Grpc
             Debug.Log("[GrpcDataStreamer] OnDestroy");
             if (sensorManager != null)
                 sensorManager.OnSensorDataUpdated -= OnSensorDataUpdated;
-
-            if (cameraCapture != null)
-                cameraCapture.OnFrameCaptured -= OnFrameCaptured;
 
             if (cts != null)
             {

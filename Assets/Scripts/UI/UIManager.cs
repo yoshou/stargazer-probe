@@ -19,7 +19,11 @@ namespace StargazerProbe.UI
         [Header("References")]
         [SerializeField] private IMUSensorManager sensorManager;
         private ICameraCapture cameraCapture;  // ファクトリーで作成するため、Serializeしない
+        private CameraFrameEncoder frameEncoder;  // EncoderをUIManagerが作成して管理
         [SerializeField] private GrpcDataStreamer grpcDataStreamer;
+        
+        [Header("Encoder Settings")]
+        [SerializeField] private int jpegQuality = 75;
         
         [Header("UI - Camera Preview")]
         [SerializeField] private RawImage cameraPreviewImage;
@@ -66,6 +70,41 @@ namespace StargazerProbe.UI
             if (cameraCapture == null)
             {
                 Debug.LogError("Failed to create camera capture");
+            }
+            else
+            {
+                // CameraFrameEncoderを作成
+                frameEncoder = new CameraFrameEncoder(System.Threading.SynchronizationContext.Current);
+                frameEncoder.Start();
+                
+                // コールバックチェーンを設定: Capture → Encoder → Grpc
+                
+                // 1. Captureの生データをEncoderに渡す
+                cameraCapture.OnFrameCaptured += (rawData) =>
+                {
+                    // 生データをEncoderにエンキュー
+                    frameEncoder.TryEnqueue(
+                        rawData.Timestamp,
+                        rawData.Width,
+                        rawData.Height,
+                        jpegQuality,
+                        rawData.Pixels,
+                        rawData.Intrinsics,
+                        rawData.ReturnBufferCallback);
+                };
+                
+                // 2. Encoderのエンコード済みデータをGrpcに渡す
+                frameEncoder.OnFrameEncoded += (frameData) =>
+                {
+                    // UIプレビュー用のコールバック
+                    OnFrameCaptured(frameData);
+                    
+                    // Grpcに送信
+                    if (grpcDataStreamer != null)
+                    {
+                        grpcDataStreamer.SendFrameData(frameData);
+                    }
+                };
             }
 
             if (grpcDataStreamer == null)
@@ -133,12 +172,6 @@ namespace StargazerProbe.UI
             if (sensorManager != null)
             {
                 sensorManager.OnSensorDataUpdated += OnSensorDataUpdated;
-            }
-            
-            // カメライベント
-            if (cameraCapture != null)
-            {
-                cameraCapture.OnFrameCaptured += OnFrameCaptured;
             }
         }
         
@@ -320,9 +353,12 @@ namespace StargazerProbe.UI
                 sensorManager.OnSensorDataUpdated -= OnSensorDataUpdated;
             }
 
-            if (cameraCapture != null)
+            // FrameEncoderの停止とDispose
+            if (frameEncoder != null)
             {
-                cameraCapture.OnFrameCaptured -= OnFrameCaptured;
+                frameEncoder.Stop();
+                frameEncoder.Dispose();
+                frameEncoder = null;
             }
         }
         

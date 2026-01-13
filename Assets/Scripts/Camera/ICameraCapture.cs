@@ -13,11 +13,9 @@ namespace StargazerProbe.Camera
         bool IsCapturing { get; }
         float ActualFPS { get; }
         int SkippedFrames { get; }
-        int PendingEncodes { get; }
-        int MaxPendingEncodes { get; }
         
         // イベント
-        event Action<CameraFrameData> OnFrameCaptured;
+        event Action<RawCameraFrameData> OnFrameCaptured;
         event Action OnCaptureStarted;
         event Action OnCaptureStopped;
         event Action<string> OnCaptureStartFailed;
