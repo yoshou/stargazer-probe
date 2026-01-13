@@ -40,7 +40,6 @@ namespace StargazerProbe.Camera
         [Header("Performance")]
         [SerializeField] private int maxSkipFrames = 3;
         [SerializeField] private int maxPendingEncodes = 2;
-        [SerializeField] private int encoderBufferCount = 3;
         
         // 状態
         public bool IsCapturing { get; private set; }

@@ -306,7 +306,7 @@ namespace StargazerProbe.Grpc
             hasSensor = true;
         }
 
-        private async void OnFrameCaptured(CameraFrameData frameData)
+        private void OnFrameCaptured(CameraFrameData frameData)
         {
             framesCaptured++;
 
