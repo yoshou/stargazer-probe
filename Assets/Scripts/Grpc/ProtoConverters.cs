@@ -30,19 +30,19 @@ namespace StargazerProbe.Grpc
                 Height = frame.Height,
                 Quality = frame.Quality,
                 CameraTimestamp = frame.Timestamp,
-
-                HasIntrinsics = frame.HasIntrinsics
+                DistortionK1 = 0f,
+                DistortionK2 = 0f,
+                DistortionP1 = 0f,
+                DistortionP2 = 0f,
+                DistortionK3 = 0f,
             };
 
-            if (frame.HasIntrinsics)
-            {
-                msg.FocalLengthX = frame.Intrinsics.FocalLengthX;
-                msg.FocalLengthY = frame.Intrinsics.FocalLengthY;
-                msg.PrincipalPointX = frame.Intrinsics.PrincipalPointX;
-                msg.PrincipalPointY = frame.Intrinsics.PrincipalPointY;
-                msg.IntrinsicsImageWidth = frame.Intrinsics.ImageWidth;
-                msg.IntrinsicsImageHeight = frame.Intrinsics.ImageHeight;
-            }
+            msg.FocalLengthX = frame.Intrinsics.FocalLengthX;
+            msg.FocalLengthY = frame.Intrinsics.FocalLengthY;
+            msg.PrincipalPointX = frame.Intrinsics.PrincipalPointX;
+            msg.PrincipalPointY = frame.Intrinsics.PrincipalPointY;
+            msg.IntrinsicsImageWidth = frame.Intrinsics.ImageWidth;
+            msg.IntrinsicsImageHeight = frame.Intrinsics.ImageHeight;
 
             return msg;
         }

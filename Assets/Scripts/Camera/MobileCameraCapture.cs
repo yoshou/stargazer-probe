@@ -473,6 +473,5 @@ namespace StargazerProbe.Camera
         public int Height;
         public int Quality;
         public CameraIntrinsics Intrinsics;
-        public bool HasIntrinsics;
     }
 }

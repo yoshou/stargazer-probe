@@ -35,15 +35,28 @@ public:
                   << " image_bytes=" << image_bytes
                   ;
 
-        if (packet.has_camera() && packet.camera().has_intrinsics()) {
+        if (packet.has_camera()) {
           const auto& c = packet.camera();
+          const bool has_intrinsics =
+              c.focal_length_x() != 0.0f || c.focal_length_y() != 0.0f ||
+              c.principal_point_x() != 0.0f || c.principal_point_y() != 0.0f ||
+              c.intrinsics_image_width() != 0 || c.intrinsics_image_height() != 0;
+
+          if (has_intrinsics) {
           std::cout << " intrinsics={fx=" << c.focal_length_x()
                     << ", fy=" << c.focal_length_y()
                     << ", cx=" << c.principal_point_x()
                     << ", cy=" << c.principal_point_y()
                     << ", w=" << c.intrinsics_image_width()
                     << ", h=" << c.intrinsics_image_height()
+                    << "}"
+                    << " distortion={k1=" << c.distortion_k1()
+                    << ", k2=" << c.distortion_k2()
+                    << ", p1=" << c.distortion_p1()
+                    << ", p2=" << c.distortion_p2()
+                    << ", k3=" << c.distortion_k3()
                     << "}";
+          }
         }
 
         std::cout << std::endl;

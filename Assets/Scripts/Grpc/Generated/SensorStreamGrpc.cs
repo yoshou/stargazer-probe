@@ -142,6 +142,4 @@ namespace Stargazer {
 
   }
 }
-
-#endregion Designer generated code
-
+#endregion

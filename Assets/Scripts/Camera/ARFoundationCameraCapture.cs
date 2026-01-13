@@ -279,7 +279,6 @@ namespace StargazerProbe.Camera
                         Quality = jpegQuality,
                         Pixels = pixels,
                         Intrinsics = hasIntrinsics ? currentIntrinsics : default,
-                        HasIntrinsics = hasIntrinsics
                     });
                     encodeSignal.Release();
                 }
@@ -334,6 +333,7 @@ namespace StargazerProbe.Camera
                 return;
             }
 
+            currentIntrinsics = default;
             hasIntrinsics = false;
         }
 
@@ -383,8 +383,7 @@ namespace StargazerProbe.Camera
                         Width = job.Width,
                         Height = job.Height,
                         Quality = job.Quality,
-                        Intrinsics = job.HasIntrinsics ? job.Intrinsics : default,
-                        HasIntrinsics = job.HasIntrinsics
+                        Intrinsics = job.Intrinsics
                     };
                     
                     PostToUnity(() => OnFrameCaptured?.Invoke(frameData));
@@ -523,7 +522,6 @@ namespace StargazerProbe.Camera
             public int Quality;
             public Color32[] Pixels;
             public CameraIntrinsics Intrinsics;
-            public bool HasIntrinsics;
         }
     }
     

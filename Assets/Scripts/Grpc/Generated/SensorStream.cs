@@ -32,23 +32,29 @@ namespace Stargazer {
             "bhgBIAEoCzISLnN0YXJnYXplci5WZWN0b3IzEiUKCWd5cm9zY29wZRgCIAEo",
             "CzISLnN0YXJnYXplci5WZWN0b3IzEigKDG1hZ25ldG9tZXRlchgDIAEoCzIS",
             "LnN0YXJnYXplci5WZWN0b3IzEiMKB2dyYXZpdHkYBCABKAsyEi5zdGFyZ2F6",
-            "ZXIuVmVjdG9yMyJrCgtDYW1lcmFGcmFtZRISCgppbWFnZV9kYXRhGAEgASgM",
-            "Eg0KBXdpZHRoGAIgASgFEg4KBmhlaWdodBgDIAEoBRIPCgdxdWFsaXR5GAQg",
-            "ASgFEhgKEGNhbWVyYV90aW1lc3RhbXAYBSABKAEiVQoEUG9zZRIkCghwb3Np",
-            "dGlvbhgBIAEoCzISLnN0YXJnYXplci5WZWN0b3IzEicKCHJvdGF0aW9uGAIg",
-            "ASgLMhUuc3RhcmdhemVyLlF1YXRlcm5pb24iOAoKUXVhdGVybmlvbhIJCgF4",
-            "GAEgASgCEgkKAXkYAiABKAISCQoBehgDIAEoAhIJCgF3GAQgASgCIioKB1Zl",
-            "Y3RvcjMSCQoBeBgBIAEoAhIJCgF5GAIgASgCEgkKAXoYAyABKAIiSgoMRGF0",
-            "YVJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSDwoHbWVzc2FnZRgCIAEoCRIY",
-            "ChByZWNlaXZlZF9wYWNrZXRzGAMgASgFMlAKDFNlbnNvclN0cmVhbRJACgpT",
-            "dHJlYW1EYXRhEhUuc3RhcmdhemVyLkRhdGFQYWNrZXQaFy5zdGFyZ2F6ZXIu",
-            "RGF0YVJlc3BvbnNlKAEwAWIGcHJvdG8z"));
+            "ZXIuVmVjdG9yMyKFAwoLQ2FtZXJhRnJhbWUSEgoKaW1hZ2VfZGF0YRgBIAEo",
+            "DBINCgV3aWR0aBgCIAEoBRIOCgZoZWlnaHQYAyABKAUSDwoHcXVhbGl0eRgE",
+            "IAEoBRIYChBjYW1lcmFfdGltZXN0YW1wGAUgASgBEhYKDmZvY2FsX2xlbmd0",
+            "aF94GAcgASgCEhYKDmZvY2FsX2xlbmd0aF95GAggASgCEhkKEXByaW5jaXBh",
+            "bF9wb2ludF94GAkgASgCEhkKEXByaW5jaXBhbF9wb2ludF95GAogASgCEh4K",
+            "FmludHJpbnNpY3NfaW1hZ2Vfd2lkdGgYCyABKAUSHwoXaW50cmluc2ljc19p",
+            "bWFnZV9oZWlnaHQYDCABKAUSFQoNZGlzdG9ydGlvbl9rMRgNIAEoAhIVCg1k",
+            "aXN0b3J0aW9uX2syGA4gASgCEhUKDWRpc3RvcnRpb25fcDEYDyABKAISFQoN",
+            "ZGlzdG9ydGlvbl9wMhgQIAEoAhIVCg1kaXN0b3J0aW9uX2szGBEgASgCIlUK",
+            "BFBvc2USJAoIcG9zaXRpb24YASABKAsyEi5zdGFyZ2F6ZXIuVmVjdG9yMxIn",
+            "Cghyb3RhdGlvbhgCIAEoCzIVLnN0YXJnYXplci5RdWF0ZXJuaW9uIjgKClF1",
+            "YXRlcm5pb24SCQoBeBgBIAEoAhIJCgF5GAIgASgCEgkKAXoYAyABKAISCQoB",
+            "dxgEIAEoAiIqCgdWZWN0b3IzEgkKAXgYASABKAISCQoBeRgCIAEoAhIJCgF6",
+            "GAMgASgCIkoKDERhdGFSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg8KB21l",
+            "c3NhZ2UYAiABKAkSGAoQcmVjZWl2ZWRfcGFja2V0cxgDIAEoBTJQCgxTZW5z",
+            "b3JTdHJlYW0SQAoKU3RyZWFtRGF0YRIVLnN0YXJnYXplci5EYXRhUGFja2V0",
+            "Ghcuc3RhcmdhemVyLkRhdGFSZXNwb25zZSgBMAFiBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Stargazer.DataPacket), global::Stargazer.DataPacket.Parser, new[]{ "Timestamp", "Sensor", "Camera", "Pose", "DeviceId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Stargazer.SensorData), global::Stargazer.SensorData.Parser, new[]{ "Acceleration", "Gyroscope", "Magnetometer", "Gravity" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Stargazer.CameraFrame), global::Stargazer.CameraFrame.Parser, new[]{ "ImageData", "Width", "Height", "Quality", "CameraTimestamp" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Stargazer.CameraFrame), global::Stargazer.CameraFrame.Parser, new[]{ "ImageData", "Width", "Height", "Quality", "CameraTimestamp", "FocalLengthX", "FocalLengthY", "PrincipalPointX", "PrincipalPointY", "IntrinsicsImageWidth", "IntrinsicsImageHeight", "DistortionK1", "DistortionK2", "DistortionP1", "DistortionP2", "DistortionK3" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Stargazer.Pose), global::Stargazer.Pose.Parser, new[]{ "Position", "Rotation" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Stargazer.Quaternion), global::Stargazer.Quaternion.Parser, new[]{ "X", "Y", "Z", "W" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Stargazer.Vector3), global::Stargazer.Vector3.Parser, new[]{ "X", "Y", "Z" }, null, null, null, null),
@@ -844,13 +850,17 @@ namespace Stargazer {
       height_ = other.height_;
       quality_ = other.quality_;
       cameraTimestamp_ = other.cameraTimestamp_;
-      hasIntrinsics_ = other.hasIntrinsics_;
       focalLengthX_ = other.focalLengthX_;
       focalLengthY_ = other.focalLengthY_;
       principalPointX_ = other.principalPointX_;
       principalPointY_ = other.principalPointY_;
       intrinsicsImageWidth_ = other.intrinsicsImageWidth_;
       intrinsicsImageHeight_ = other.intrinsicsImageHeight_;
+      distortionK1_ = other.distortionK1_;
+      distortionK2_ = other.distortionK2_;
+      distortionP1_ = other.distortionP1_;
+      distortionP2_ = other.distortionP2_;
+      distortionK3_ = other.distortionK3_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -923,21 +933,13 @@ namespace Stargazer {
       }
     }
 
-    /// <summary>Field number for the "has_intrinsics" field.</summary>
-    public const int HasIntrinsicsFieldNumber = 6;
-    private bool hasIntrinsics_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool HasIntrinsics {
-      get { return hasIntrinsics_; }
-      set {
-        hasIntrinsics_ = value;
-      }
-    }
-
     /// <summary>Field number for the "focal_length_x" field.</summary>
     public const int FocalLengthXFieldNumber = 7;
     private float focalLengthX_;
+    /// <summary>
+    /// Camera intrinsics (e.g., from ARFoundation)
+    /// Values should correspond to the same resolution as image_data.
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public float FocalLengthX {
@@ -950,6 +952,9 @@ namespace Stargazer {
     /// <summary>Field number for the "focal_length_y" field.</summary>
     public const int FocalLengthYFieldNumber = 8;
     private float focalLengthY_;
+    /// <summary>
+    /// fy
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public float FocalLengthY {
@@ -962,6 +967,9 @@ namespace Stargazer {
     /// <summary>Field number for the "principal_point_x" field.</summary>
     public const int PrincipalPointXFieldNumber = 9;
     private float principalPointX_;
+    /// <summary>
+    /// cx
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public float PrincipalPointX {
@@ -974,6 +982,9 @@ namespace Stargazer {
     /// <summary>Field number for the "principal_point_y" field.</summary>
     public const int PrincipalPointYFieldNumber = 10;
     private float principalPointY_;
+    /// <summary>
+    /// cy
+    /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public float PrincipalPointY {
@@ -1007,6 +1018,71 @@ namespace Stargazer {
       }
     }
 
+    /// <summary>Field number for the "distortion_k1" field.</summary>
+    public const int DistortionK1FieldNumber = 13;
+    private float distortionK1_;
+    /// <summary>
+    /// Distortion coefficients (Brown–Conrady).
+    /// Note: ARFoundation CPU images are typically already undistorted on ARCore,
+    /// so we send zeros.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float DistortionK1 {
+      get { return distortionK1_; }
+      set {
+        distortionK1_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "distortion_k2" field.</summary>
+    public const int DistortionK2FieldNumber = 14;
+    private float distortionK2_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float DistortionK2 {
+      get { return distortionK2_; }
+      set {
+        distortionK2_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "distortion_p1" field.</summary>
+    public const int DistortionP1FieldNumber = 15;
+    private float distortionP1_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float DistortionP1 {
+      get { return distortionP1_; }
+      set {
+        distortionP1_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "distortion_p2" field.</summary>
+    public const int DistortionP2FieldNumber = 16;
+    private float distortionP2_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float DistortionP2 {
+      get { return distortionP2_; }
+      set {
+        distortionP2_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "distortion_k3" field.</summary>
+    public const int DistortionK3FieldNumber = 17;
+    private float distortionK3_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float DistortionK3 {
+      get { return distortionK3_; }
+      set {
+        distortionK3_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -1027,13 +1103,17 @@ namespace Stargazer {
       if (Height != other.Height) return false;
       if (Quality != other.Quality) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(CameraTimestamp, other.CameraTimestamp)) return false;
-      if (HasIntrinsics != other.HasIntrinsics) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(FocalLengthX, other.FocalLengthX)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(FocalLengthY, other.FocalLengthY)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(PrincipalPointX, other.PrincipalPointX)) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(PrincipalPointY, other.PrincipalPointY)) return false;
       if (IntrinsicsImageWidth != other.IntrinsicsImageWidth) return false;
       if (IntrinsicsImageHeight != other.IntrinsicsImageHeight) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(DistortionK1, other.DistortionK1)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(DistortionK2, other.DistortionK2)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(DistortionP1, other.DistortionP1)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(DistortionP2, other.DistortionP2)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(DistortionK3, other.DistortionK3)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -1046,13 +1126,17 @@ namespace Stargazer {
       if (Height != 0) hash ^= Height.GetHashCode();
       if (Quality != 0) hash ^= Quality.GetHashCode();
       if (CameraTimestamp != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(CameraTimestamp);
-      if (HasIntrinsics != false) hash ^= HasIntrinsics.GetHashCode();
       if (FocalLengthX != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(FocalLengthX);
       if (FocalLengthY != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(FocalLengthY);
       if (PrincipalPointX != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(PrincipalPointX);
       if (PrincipalPointY != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(PrincipalPointY);
       if (IntrinsicsImageWidth != 0) hash ^= IntrinsicsImageWidth.GetHashCode();
       if (IntrinsicsImageHeight != 0) hash ^= IntrinsicsImageHeight.GetHashCode();
+      if (DistortionK1 != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(DistortionK1);
+      if (DistortionK2 != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(DistortionK2);
+      if (DistortionP1 != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(DistortionP1);
+      if (DistortionP2 != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(DistortionP2);
+      if (DistortionK3 != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(DistortionK3);
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -1091,10 +1175,6 @@ namespace Stargazer {
         output.WriteRawTag(41);
         output.WriteDouble(CameraTimestamp);
       }
-      if (HasIntrinsics != false) {
-        output.WriteRawTag(48);
-        output.WriteBool(HasIntrinsics);
-      }
       if (FocalLengthX != 0F) {
         output.WriteRawTag(61);
         output.WriteFloat(FocalLengthX);
@@ -1118,6 +1198,26 @@ namespace Stargazer {
       if (IntrinsicsImageHeight != 0) {
         output.WriteRawTag(96);
         output.WriteInt32(IntrinsicsImageHeight);
+      }
+      if (DistortionK1 != 0F) {
+        output.WriteRawTag(109);
+        output.WriteFloat(DistortionK1);
+      }
+      if (DistortionK2 != 0F) {
+        output.WriteRawTag(117);
+        output.WriteFloat(DistortionK2);
+      }
+      if (DistortionP1 != 0F) {
+        output.WriteRawTag(125);
+        output.WriteFloat(DistortionP1);
+      }
+      if (DistortionP2 != 0F) {
+        output.WriteRawTag(133, 1);
+        output.WriteFloat(DistortionP2);
+      }
+      if (DistortionK3 != 0F) {
+        output.WriteRawTag(141, 1);
+        output.WriteFloat(DistortionK3);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
@@ -1149,10 +1249,6 @@ namespace Stargazer {
         output.WriteRawTag(41);
         output.WriteDouble(CameraTimestamp);
       }
-      if (HasIntrinsics != false) {
-        output.WriteRawTag(48);
-        output.WriteBool(HasIntrinsics);
-      }
       if (FocalLengthX != 0F) {
         output.WriteRawTag(61);
         output.WriteFloat(FocalLengthX);
@@ -1176,6 +1272,26 @@ namespace Stargazer {
       if (IntrinsicsImageHeight != 0) {
         output.WriteRawTag(96);
         output.WriteInt32(IntrinsicsImageHeight);
+      }
+      if (DistortionK1 != 0F) {
+        output.WriteRawTag(109);
+        output.WriteFloat(DistortionK1);
+      }
+      if (DistortionK2 != 0F) {
+        output.WriteRawTag(117);
+        output.WriteFloat(DistortionK2);
+      }
+      if (DistortionP1 != 0F) {
+        output.WriteRawTag(125);
+        output.WriteFloat(DistortionP1);
+      }
+      if (DistortionP2 != 0F) {
+        output.WriteRawTag(133, 1);
+        output.WriteFloat(DistortionP2);
+      }
+      if (DistortionK3 != 0F) {
+        output.WriteRawTag(141, 1);
+        output.WriteFloat(DistortionK3);
       }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
@@ -1202,9 +1318,6 @@ namespace Stargazer {
       if (CameraTimestamp != 0D) {
         size += 1 + 8;
       }
-      if (HasIntrinsics != false) {
-        size += 1 + 1;
-      }
       if (FocalLengthX != 0F) {
         size += 1 + 4;
       }
@@ -1222,6 +1335,21 @@ namespace Stargazer {
       }
       if (IntrinsicsImageHeight != 0) {
         size += 1 + pb::CodedOutputStream.ComputeInt32Size(IntrinsicsImageHeight);
+      }
+      if (DistortionK1 != 0F) {
+        size += 1 + 4;
+      }
+      if (DistortionK2 != 0F) {
+        size += 1 + 4;
+      }
+      if (DistortionP1 != 0F) {
+        size += 1 + 4;
+      }
+      if (DistortionP2 != 0F) {
+        size += 2 + 4;
+      }
+      if (DistortionK3 != 0F) {
+        size += 2 + 4;
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -1250,9 +1378,6 @@ namespace Stargazer {
       if (other.CameraTimestamp != 0D) {
         CameraTimestamp = other.CameraTimestamp;
       }
-      if (other.HasIntrinsics != false) {
-        HasIntrinsics = other.HasIntrinsics;
-      }
       if (other.FocalLengthX != 0F) {
         FocalLengthX = other.FocalLengthX;
       }
@@ -1270,6 +1395,21 @@ namespace Stargazer {
       }
       if (other.IntrinsicsImageHeight != 0) {
         IntrinsicsImageHeight = other.IntrinsicsImageHeight;
+      }
+      if (other.DistortionK1 != 0F) {
+        DistortionK1 = other.DistortionK1;
+      }
+      if (other.DistortionK2 != 0F) {
+        DistortionK2 = other.DistortionK2;
+      }
+      if (other.DistortionP1 != 0F) {
+        DistortionP1 = other.DistortionP1;
+      }
+      if (other.DistortionP2 != 0F) {
+        DistortionP2 = other.DistortionP2;
+      }
+      if (other.DistortionK3 != 0F) {
+        DistortionK3 = other.DistortionK3;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -1310,10 +1450,6 @@ namespace Stargazer {
             CameraTimestamp = input.ReadDouble();
             break;
           }
-          case 48: {
-            HasIntrinsics = input.ReadBool();
-            break;
-          }
           case 61: {
             FocalLengthX = input.ReadFloat();
             break;
@@ -1336,6 +1472,26 @@ namespace Stargazer {
           }
           case 96: {
             IntrinsicsImageHeight = input.ReadInt32();
+            break;
+          }
+          case 109: {
+            DistortionK1 = input.ReadFloat();
+            break;
+          }
+          case 117: {
+            DistortionK2 = input.ReadFloat();
+            break;
+          }
+          case 125: {
+            DistortionP1 = input.ReadFloat();
+            break;
+          }
+          case 133: {
+            DistortionP2 = input.ReadFloat();
+            break;
+          }
+          case 141: {
+            DistortionK3 = input.ReadFloat();
             break;
           }
         }
@@ -1377,10 +1533,6 @@ namespace Stargazer {
             CameraTimestamp = input.ReadDouble();
             break;
           }
-          case 48: {
-            HasIntrinsics = input.ReadBool();
-            break;
-          }
           case 61: {
             FocalLengthX = input.ReadFloat();
             break;
@@ -1403,6 +1555,26 @@ namespace Stargazer {
           }
           case 96: {
             IntrinsicsImageHeight = input.ReadInt32();
+            break;
+          }
+          case 109: {
+            DistortionK1 = input.ReadFloat();
+            break;
+          }
+          case 117: {
+            DistortionK2 = input.ReadFloat();
+            break;
+          }
+          case 125: {
+            DistortionP1 = input.ReadFloat();
+            break;
+          }
+          case 133: {
+            DistortionP2 = input.ReadFloat();
+            break;
+          }
+          case 141: {
+            DistortionK3 = input.ReadFloat();
             break;
           }
         }
@@ -2522,6 +2694,4 @@ namespace Stargazer {
 
 }
 
-
 #endregion Designer generated code
-
