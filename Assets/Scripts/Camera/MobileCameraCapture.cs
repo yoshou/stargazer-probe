@@ -1,9 +1,7 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
-using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 
@@ -45,20 +43,14 @@ namespace StargazerProbe.Camera
         private readonly object bufferLock = new object();
         private Queue<Color32[]> availableBuffers;
 
-        private readonly ConcurrentQueue<EncodeJob> encodeQueue = new ConcurrentQueue<EncodeJob>();
-        private readonly SemaphoreSlim encodeSignal = new SemaphoreSlim(0);
-        private CancellationTokenSource encodeCts;
-        private Task encodeTask;
-        private int pendingEncodes;
-
-        private SynchronizationContext unityContext;
+        private CameraFrameEncoder frameEncoder;
         
         // 状態
         public bool IsCapturing { get; private set; }
         public float ActualFPS { get; private set; }
         public int SkippedFrames { get; private set; }
 
-        public int PendingEncodes => Volatile.Read(ref pendingEncodes);
+        public int PendingEncodes => frameEncoder != null ? frameEncoder.PendingCount : 0;
         public int MaxPendingEncodes => maxPendingEncodes;
         
         // イベント
@@ -75,7 +67,6 @@ namespace StargazerProbe.Camera
         private void Awake()
         {
             captureInterval = 1f / targetFPS;
-            unityContext = SynchronizationContext.Current;
         }
         
         /// <summary>
@@ -151,7 +142,12 @@ namespace StargazerProbe.Camera
                 availableBuffers.Enqueue(new Color32[w * h]);
             }
 
-            StartEncoderLoop();
+            if (frameEncoder == null)
+            {
+                frameEncoder = new CameraFrameEncoder(SynchronizationContext.Current);
+                frameEncoder.OnFrameEncoded += frameData => OnFrameCaptured?.Invoke(frameData);
+            }
+            frameEncoder.Start();
             
             IsCapturing = true;
             lastCaptureTime = Time.unscaledTime;
@@ -190,8 +186,6 @@ namespace StargazerProbe.Camera
         {
             Debug.Log($"Camera resolution changed: {bufferWidth}x{bufferHeight} -> {w}x{h}. Rebuilding buffers.");
 
-            StopEncoderLoop();
-
             bufferWidth = w;
             bufferHeight = h;
 
@@ -201,15 +195,13 @@ namespace StargazerProbe.Camera
             {
                 availableBuffers.Enqueue(new Color32[w * h]);
             }
-
-            StartEncoderLoop();
         }
         
         private void CaptureFrame()
         {
             // エンコードが追いつかない場合は間引く（メインスレッドのFPS維持を優先）。
             // ここで溜め続けると遅延が増えるだけでなく、メモリ増加やGC負荷につながる。
-            if (pendingEncodes >= maxPendingEncodes)
+            if (PendingEncodes >= maxPendingEncodes)
             {
                 consecutiveSkips++;
                 SkippedFrames++;
@@ -244,93 +236,23 @@ namespace StargazerProbe.Camera
             int w = webCamTexture.width;
             int h = webCamTexture.height;
 
-            Interlocked.Increment(ref pendingEncodes);
-            encodeQueue.Enqueue(new EncodeJob
+            if (frameEncoder == null)
             {
-                Timestamp = Time.realtimeSinceStartup,
-                Width = w,
-                Height = h,
-                Quality = jpegQuality,
-                Pixels = buffer
-            });
-            encodeSignal.Release();
-        }
-
-        private void StartEncoderLoop()
-        {
-            if (encodeTask != null && !encodeTask.IsCompleted)
-                return;
-
-            encodeCts?.Cancel();
-            encodeCts?.Dispose();
-            encodeCts = new CancellationTokenSource();
-
-            encodeTask = Task.Run(() => EncodeLoopAsync(encodeCts.Token));
-        }
-
-        private async Task EncodeLoopAsync(CancellationToken cancellationToken)
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                try
-                {
-                    await encodeSignal.WaitAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-
-                if (!encodeQueue.TryDequeue(out var job))
-                    continue;
-
-                try
-                {
-                    // JPEGエンコード（重い処理）をバックグラウンドで実行
-                    byte[] jpegData = ImageConversion.EncodeArrayToJPG(
-                        job.Pixels,
-                        GraphicsFormat.R8G8B8A8_UNorm,
-                        (uint)job.Width,
-                        (uint)job.Height,
-                        0,
-                        job.Quality);
-
-                    var frameData = new CameraFrameData
-                    {
-                        Timestamp = job.Timestamp,
-                        ImageData = jpegData,
-                        Width = job.Width,
-                        Height = job.Height,
-                        Quality = job.Quality
-                    };
-
-                    PostToUnity(() => OnFrameCaptured?.Invoke(frameData));
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"Camera encode failed: {ex.Message}");
-                }
-                finally
-                {
-                    ReturnPixelBuffer(job.Pixels);
-                    Interlocked.Decrement(ref pendingEncodes);
-                }
-            }
-        }
-
-        private void PostToUnity(Action action)
-        {
-            if (action == null)
-                return;
-
-            if (unityContext != null)
-            {
-                unityContext.Post(_ => action(), null);
+                ReturnPixelBuffer(buffer);
                 return;
             }
 
-            // Fallback
-            action();
+            if (!frameEncoder.TryEnqueue(
+                    Time.realtimeSinceStartup,
+                    w,
+                    h,
+                    jpegQuality,
+                    buffer,
+                    default,
+                    ReturnPixelBuffer))
+            {
+                ReturnPixelBuffer(buffer);
+            }
         }
 
         private Color32[] RentPixelBuffer()
@@ -349,6 +271,11 @@ namespace StargazerProbe.Camera
         private void ReturnPixelBuffer(Color32[] buffer)
         {
             if (buffer == null || availableBuffers == null)
+                return;
+
+            // 解像度変更などでサイズ不一致のバッファが返ってきた場合は再利用しない。
+            int expected = bufferWidth > 0 && bufferHeight > 0 ? bufferWidth * bufferHeight : buffer.Length;
+            if (buffer.Length != expected)
                 return;
 
             lock (bufferLock)
@@ -377,41 +304,7 @@ namespace StargazerProbe.Camera
             Debug.Log("Camera stopped");
             OnCaptureStopped?.Invoke();
 
-            StopEncoderLoop();
-        }
-
-        private void StopEncoderLoop()
-        {
-            try
-            {
-                encodeCts?.Cancel();
-                // WaitAsync中のスレッドを解除して終了を促す。
-                try { encodeSignal.Release(); } catch { }
-            }
-            catch { }
-
-            // できるだけ短時間だけ待って、停止中のカウンタ競合を減らす。
-            try
-            {
-                if (encodeTask != null)
-                {
-                    encodeTask.Wait(200);
-                }
-            }
-            catch { }
-
-            // キューに残ったジョブを排出して、借りたバッファを返却する。
-            while (encodeQueue.TryDequeue(out var job))
-            {
-                ReturnPixelBuffer(job.Pixels);
-            }
-
-            // 停止時はバックログをリセットする（エンコードタスクはキャンセル済み）。
-            Interlocked.Exchange(ref pendingEncodes, 0);
-
-            encodeCts?.Dispose();
-            encodeCts = null;
-            encodeTask = null;
+            frameEncoder?.Stop();
         }
         
         /// <summary>
@@ -449,29 +342,12 @@ namespace StargazerProbe.Camera
         private void OnDestroy()
         {
             StopCapture();
-        }
 
-        private struct EncodeJob
-        {
-            public double Timestamp;
-            public int Width;
-            public int Height;
-            public int Quality;
-            public Color32[] Pixels;
+            if (frameEncoder != null)
+            {
+                frameEncoder.Dispose();
+                frameEncoder = null;
+            }
         }
-    }
-    
-    /// <summary>
-    /// カメラフレームデータ構造体
-    /// </summary>
-    [Serializable]
-    public struct CameraFrameData
-    {
-        public double Timestamp;
-        public byte[] ImageData;
-        public int Width;
-        public int Height;
-        public int Quality;
-        public CameraIntrinsics Intrinsics;
     }
 }

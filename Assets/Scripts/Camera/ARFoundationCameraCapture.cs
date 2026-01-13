@@ -1,13 +1,10 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
-using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
-using UnityEngine.Experimental.Rendering;
 using Unity.Collections;
 
 namespace StargazerProbe.Camera
@@ -45,7 +42,7 @@ namespace StargazerProbe.Camera
         public bool IsCapturing { get; private set; }
         public float ActualFPS { get; private set; }
         public int SkippedFrames { get; private set; }
-        public int PendingEncodes => Volatile.Read(ref pendingEncodes);
+        public int PendingEncodes => frameEncoder != null ? frameEncoder.PendingCount : 0;
         public int MaxPendingEncodes => maxPendingEncodes;
         
         // イベント
@@ -54,13 +51,9 @@ namespace StargazerProbe.Camera
         public event Action OnCaptureStopped;
         public event Action<string> OnCaptureStartFailed;
         
-        // エンコーディング
-        private readonly ConcurrentQueue<EncodeJob> encodeQueue = new ConcurrentQueue<EncodeJob>();
-        private readonly SemaphoreSlim encodeSignal = new SemaphoreSlim(0);
-        private CancellationTokenSource encodeCts;
-        private Task encodeTask;
-        private int pendingEncodes;
         private SynchronizationContext unityContext;
+
+        private CameraFrameEncoder frameEncoder;
         
         // 内部変数
         private float captureInterval;
@@ -81,6 +74,9 @@ namespace StargazerProbe.Camera
         {
             captureInterval = 1f / targetFPS;
             unityContext = SynchronizationContext.Current;
+
+            frameEncoder = new CameraFrameEncoder(unityContext);
+            frameEncoder.OnFrameEncoded += frameData => OnFrameCaptured?.Invoke(frameData);
             
             // ARCameraManagerを自動検索
             if (arCameraManager == null)
@@ -175,7 +171,7 @@ namespace StargazerProbe.Camera
             arCameraManager.frameReceived += OnCameraFrameReceived;
 
             // エンコーダーを開始
-            StartEncoderLoop();
+            frameEncoder?.Start();
             
             IsCapturing = true;
             lastCaptureTime = Time.unscaledTime;
@@ -205,7 +201,7 @@ namespace StargazerProbe.Camera
             try
             {
                 // エンコードが追いつかない場合は間引く
-                if (pendingEncodes >= maxPendingEncodes)
+                if (PendingEncodes >= maxPendingEncodes)
                 {
                     consecutiveSkips++;
                     SkippedFrames++;
@@ -268,18 +264,14 @@ namespace StargazerProbe.Camera
                     // UIプレビュー用テクスチャを更新（メインスレッド）
                     UpdatePreviewTexture(image.width, image.height, pixels);
                     
-                    // エンコードジョブをキューに追加
-                    Interlocked.Increment(ref pendingEncodes);
-                    encodeQueue.Enqueue(new EncodeJob
-                    {
-                        Timestamp = Time.realtimeSinceStartup,
-                        Width = image.width,
-                        Height = image.height,
-                        Quality = jpegQuality,
-                        Pixels = pixels,
-                        Intrinsics = hasIntrinsics ? currentIntrinsics : default,
-                    });
-                    encodeSignal.Release();
+                    frameEncoder?.TryEnqueue(
+                        Time.realtimeSinceStartup,
+                        image.width,
+                        image.height,
+                        jpegQuality,
+                        pixels,
+                        hasIntrinsics ? currentIntrinsics : default,
+                        null);
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -336,82 +328,6 @@ namespace StargazerProbe.Camera
             hasIntrinsics = false;
         }
 
-        private void StartEncoderLoop()
-        {
-            if (encodeTask != null && !encodeTask.IsCompleted)
-                return;
-            
-            encodeCts?.Cancel();
-            encodeCts?.Dispose();
-            encodeCts = new CancellationTokenSource();
-            
-            encodeTask = Task.Run(() => EncodeLoopAsync(encodeCts.Token));
-        }
-        
-        private async Task EncodeLoopAsync(CancellationToken cancellationToken)
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                try
-                {
-                    await encodeSignal.WaitAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                
-                if (!encodeQueue.TryDequeue(out var job))
-                    continue;
-                
-                try
-                {
-                    // JPEGエンコード
-                    byte[] jpegData = ImageConversion.EncodeArrayToJPG(
-                        job.Pixels,
-                        GraphicsFormat.R8G8B8A8_UNorm,
-                        (uint)job.Width,
-                        (uint)job.Height,
-                        0,
-                        job.Quality);
-                    
-                    var frameData = new CameraFrameData
-                    {
-                        Timestamp = job.Timestamp,
-                        ImageData = jpegData,
-                        Width = job.Width,
-                        Height = job.Height,
-                        Quality = job.Quality,
-                        Intrinsics = job.Intrinsics
-                    };
-                    
-                    PostToUnity(() => OnFrameCaptured?.Invoke(frameData));
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"AR Camera encode failed: {ex.Message}");
-                }
-                finally
-                {
-                    Interlocked.Decrement(ref pendingEncodes);
-                }
-            }
-        }
-        
-        private void PostToUnity(Action action)
-        {
-            if (action == null)
-                return;
-            
-            if (unityContext != null)
-            {
-                unityContext.Post(_ => action(), null);
-                return;
-            }
-            
-            action();
-        }
-        
         /// <summary>
         /// カメラを停止
         /// </summary>
@@ -419,50 +335,20 @@ namespace StargazerProbe.Camera
         {
             if (!IsCapturing)
                 return;
-            
+
             IsCapturing = false;
-            
+
             if (arCameraManager != null)
             {
                 arCameraManager.frameReceived -= OnCameraFrameReceived;
             }
-            
-            StopEncoderLoop();
-            
+
+            frameEncoder?.Stop();
+
             Debug.Log("AR Camera stopped");
             OnCaptureStopped?.Invoke();
         }
-        
-        private void StopEncoderLoop()
-        {
-            try
-            {
-                encodeCts?.Cancel();
-                try { encodeSignal.Release(); } catch { }
-            }
-            catch { }
-            
-            try
-            {
-                if (encodeTask != null)
-                {
-                    encodeTask.Wait(200);
-                }
-            }
-            catch { }
-            
-            while (encodeQueue.TryDequeue(out _))
-            {
-                // キューをクリア
-            }
-            
-            Interlocked.Exchange(ref pendingEncodes, 0);
-            
-            encodeCts?.Dispose();
-            encodeCts = null;
-            encodeTask = null;
-        }
-        
+
         /// <summary>
         /// カメラ設定を変更
         /// </summary>
@@ -472,10 +358,10 @@ namespace StargazerProbe.Camera
             targetFPS = newFPS;
             jpegQuality = Mathf.Clamp(newQuality, 1, 100);
             captureInterval = 1f / targetFPS;
-            
+
             Debug.Log($"AR Camera settings updated: {targetFPS}fps, quality={jpegQuality}");
         }
-        
+
         /// <summary>
         /// プレビュー用のテクスチャを取得
         /// </summary>
@@ -507,34 +393,16 @@ namespace StargazerProbe.Camera
             previewTexture.SetPixels32(pixels);
             previewTexture.Apply(false);
         }
-        
+
         private void OnDestroy()
         {
             StopCapture();
+
+            if (frameEncoder != null)
+            {
+                frameEncoder.Dispose();
+                frameEncoder = null;
+            }
         }
-        
-        private struct EncodeJob
-        {
-            public double Timestamp;
-            public int Width;
-            public int Height;
-            public int Quality;
-            public Color32[] Pixels;
-            public CameraIntrinsics Intrinsics;
-        }
-    }
-    
-    /// <summary>
-    /// カメラ内部パラメータ
-    /// </summary>
-    [Serializable]
-    public struct CameraIntrinsics
-    {
-        public float FocalLengthX;      // fx
-        public float FocalLengthY;      // fy
-        public float PrincipalPointX;   // cx
-        public float PrincipalPointY;   // cy
-        public int ImageWidth;
-        public int ImageHeight;
     }
 }
