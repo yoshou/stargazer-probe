@@ -27,6 +27,16 @@ message CameraFrame {
   int32 height = 3;
   int32 quality = 4;
   double camera_timestamp = 5;
+
+  // Camera intrinsics (e.g., from ARFoundation)
+  // Values should correspond to the same resolution as image_data.
+  bool has_intrinsics = 6;
+  float focal_length_x = 7;      // fx
+  float focal_length_y = 8;      // fy
+  float principal_point_x = 9;   // cx
+  float principal_point_y = 10;  // cy
+  int32 intrinsics_image_width = 11;
+  int32 intrinsics_image_height = 12;
 }
 
 message Pose {

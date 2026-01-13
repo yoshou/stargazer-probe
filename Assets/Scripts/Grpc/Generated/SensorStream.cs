@@ -844,6 +844,13 @@ namespace Stargazer {
       height_ = other.height_;
       quality_ = other.quality_;
       cameraTimestamp_ = other.cameraTimestamp_;
+      hasIntrinsics_ = other.hasIntrinsics_;
+      focalLengthX_ = other.focalLengthX_;
+      focalLengthY_ = other.focalLengthY_;
+      principalPointX_ = other.principalPointX_;
+      principalPointY_ = other.principalPointY_;
+      intrinsicsImageWidth_ = other.intrinsicsImageWidth_;
+      intrinsicsImageHeight_ = other.intrinsicsImageHeight_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -916,6 +923,90 @@ namespace Stargazer {
       }
     }
 
+    /// <summary>Field number for the "has_intrinsics" field.</summary>
+    public const int HasIntrinsicsFieldNumber = 6;
+    private bool hasIntrinsics_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool HasIntrinsics {
+      get { return hasIntrinsics_; }
+      set {
+        hasIntrinsics_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "focal_length_x" field.</summary>
+    public const int FocalLengthXFieldNumber = 7;
+    private float focalLengthX_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float FocalLengthX {
+      get { return focalLengthX_; }
+      set {
+        focalLengthX_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "focal_length_y" field.</summary>
+    public const int FocalLengthYFieldNumber = 8;
+    private float focalLengthY_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float FocalLengthY {
+      get { return focalLengthY_; }
+      set {
+        focalLengthY_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "principal_point_x" field.</summary>
+    public const int PrincipalPointXFieldNumber = 9;
+    private float principalPointX_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float PrincipalPointX {
+      get { return principalPointX_; }
+      set {
+        principalPointX_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "principal_point_y" field.</summary>
+    public const int PrincipalPointYFieldNumber = 10;
+    private float principalPointY_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public float PrincipalPointY {
+      get { return principalPointY_; }
+      set {
+        principalPointY_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "intrinsics_image_width" field.</summary>
+    public const int IntrinsicsImageWidthFieldNumber = 11;
+    private int intrinsicsImageWidth_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int IntrinsicsImageWidth {
+      get { return intrinsicsImageWidth_; }
+      set {
+        intrinsicsImageWidth_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "intrinsics_image_height" field.</summary>
+    public const int IntrinsicsImageHeightFieldNumber = 12;
+    private int intrinsicsImageHeight_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int IntrinsicsImageHeight {
+      get { return intrinsicsImageHeight_; }
+      set {
+        intrinsicsImageHeight_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -936,6 +1027,13 @@ namespace Stargazer {
       if (Height != other.Height) return false;
       if (Quality != other.Quality) return false;
       if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(CameraTimestamp, other.CameraTimestamp)) return false;
+      if (HasIntrinsics != other.HasIntrinsics) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(FocalLengthX, other.FocalLengthX)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(FocalLengthY, other.FocalLengthY)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(PrincipalPointX, other.PrincipalPointX)) return false;
+      if (!pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.Equals(PrincipalPointY, other.PrincipalPointY)) return false;
+      if (IntrinsicsImageWidth != other.IntrinsicsImageWidth) return false;
+      if (IntrinsicsImageHeight != other.IntrinsicsImageHeight) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -948,6 +1046,13 @@ namespace Stargazer {
       if (Height != 0) hash ^= Height.GetHashCode();
       if (Quality != 0) hash ^= Quality.GetHashCode();
       if (CameraTimestamp != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(CameraTimestamp);
+      if (HasIntrinsics != false) hash ^= HasIntrinsics.GetHashCode();
+      if (FocalLengthX != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(FocalLengthX);
+      if (FocalLengthY != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(FocalLengthY);
+      if (PrincipalPointX != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(PrincipalPointX);
+      if (PrincipalPointY != 0F) hash ^= pbc::ProtobufEqualityComparers.BitwiseSingleEqualityComparer.GetHashCode(PrincipalPointY);
+      if (IntrinsicsImageWidth != 0) hash ^= IntrinsicsImageWidth.GetHashCode();
+      if (IntrinsicsImageHeight != 0) hash ^= IntrinsicsImageHeight.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -986,6 +1091,34 @@ namespace Stargazer {
         output.WriteRawTag(41);
         output.WriteDouble(CameraTimestamp);
       }
+      if (HasIntrinsics != false) {
+        output.WriteRawTag(48);
+        output.WriteBool(HasIntrinsics);
+      }
+      if (FocalLengthX != 0F) {
+        output.WriteRawTag(61);
+        output.WriteFloat(FocalLengthX);
+      }
+      if (FocalLengthY != 0F) {
+        output.WriteRawTag(69);
+        output.WriteFloat(FocalLengthY);
+      }
+      if (PrincipalPointX != 0F) {
+        output.WriteRawTag(77);
+        output.WriteFloat(PrincipalPointX);
+      }
+      if (PrincipalPointY != 0F) {
+        output.WriteRawTag(85);
+        output.WriteFloat(PrincipalPointY);
+      }
+      if (IntrinsicsImageWidth != 0) {
+        output.WriteRawTag(88);
+        output.WriteInt32(IntrinsicsImageWidth);
+      }
+      if (IntrinsicsImageHeight != 0) {
+        output.WriteRawTag(96);
+        output.WriteInt32(IntrinsicsImageHeight);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -1016,6 +1149,34 @@ namespace Stargazer {
         output.WriteRawTag(41);
         output.WriteDouble(CameraTimestamp);
       }
+      if (HasIntrinsics != false) {
+        output.WriteRawTag(48);
+        output.WriteBool(HasIntrinsics);
+      }
+      if (FocalLengthX != 0F) {
+        output.WriteRawTag(61);
+        output.WriteFloat(FocalLengthX);
+      }
+      if (FocalLengthY != 0F) {
+        output.WriteRawTag(69);
+        output.WriteFloat(FocalLengthY);
+      }
+      if (PrincipalPointX != 0F) {
+        output.WriteRawTag(77);
+        output.WriteFloat(PrincipalPointX);
+      }
+      if (PrincipalPointY != 0F) {
+        output.WriteRawTag(85);
+        output.WriteFloat(PrincipalPointY);
+      }
+      if (IntrinsicsImageWidth != 0) {
+        output.WriteRawTag(88);
+        output.WriteInt32(IntrinsicsImageWidth);
+      }
+      if (IntrinsicsImageHeight != 0) {
+        output.WriteRawTag(96);
+        output.WriteInt32(IntrinsicsImageHeight);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -1040,6 +1201,27 @@ namespace Stargazer {
       }
       if (CameraTimestamp != 0D) {
         size += 1 + 8;
+      }
+      if (HasIntrinsics != false) {
+        size += 1 + 1;
+      }
+      if (FocalLengthX != 0F) {
+        size += 1 + 4;
+      }
+      if (FocalLengthY != 0F) {
+        size += 1 + 4;
+      }
+      if (PrincipalPointX != 0F) {
+        size += 1 + 4;
+      }
+      if (PrincipalPointY != 0F) {
+        size += 1 + 4;
+      }
+      if (IntrinsicsImageWidth != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(IntrinsicsImageWidth);
+      }
+      if (IntrinsicsImageHeight != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeInt32Size(IntrinsicsImageHeight);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -1067,6 +1249,27 @@ namespace Stargazer {
       }
       if (other.CameraTimestamp != 0D) {
         CameraTimestamp = other.CameraTimestamp;
+      }
+      if (other.HasIntrinsics != false) {
+        HasIntrinsics = other.HasIntrinsics;
+      }
+      if (other.FocalLengthX != 0F) {
+        FocalLengthX = other.FocalLengthX;
+      }
+      if (other.FocalLengthY != 0F) {
+        FocalLengthY = other.FocalLengthY;
+      }
+      if (other.PrincipalPointX != 0F) {
+        PrincipalPointX = other.PrincipalPointX;
+      }
+      if (other.PrincipalPointY != 0F) {
+        PrincipalPointY = other.PrincipalPointY;
+      }
+      if (other.IntrinsicsImageWidth != 0) {
+        IntrinsicsImageWidth = other.IntrinsicsImageWidth;
+      }
+      if (other.IntrinsicsImageHeight != 0) {
+        IntrinsicsImageHeight = other.IntrinsicsImageHeight;
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -1107,6 +1310,34 @@ namespace Stargazer {
             CameraTimestamp = input.ReadDouble();
             break;
           }
+          case 48: {
+            HasIntrinsics = input.ReadBool();
+            break;
+          }
+          case 61: {
+            FocalLengthX = input.ReadFloat();
+            break;
+          }
+          case 69: {
+            FocalLengthY = input.ReadFloat();
+            break;
+          }
+          case 77: {
+            PrincipalPointX = input.ReadFloat();
+            break;
+          }
+          case 85: {
+            PrincipalPointY = input.ReadFloat();
+            break;
+          }
+          case 88: {
+            IntrinsicsImageWidth = input.ReadInt32();
+            break;
+          }
+          case 96: {
+            IntrinsicsImageHeight = input.ReadInt32();
+            break;
+          }
         }
       }
     #endif
@@ -1144,6 +1375,34 @@ namespace Stargazer {
           }
           case 41: {
             CameraTimestamp = input.ReadDouble();
+            break;
+          }
+          case 48: {
+            HasIntrinsics = input.ReadBool();
+            break;
+          }
+          case 61: {
+            FocalLengthX = input.ReadFloat();
+            break;
+          }
+          case 69: {
+            FocalLengthY = input.ReadFloat();
+            break;
+          }
+          case 77: {
+            PrincipalPointX = input.ReadFloat();
+            break;
+          }
+          case 85: {
+            PrincipalPointY = input.ReadFloat();
+            break;
+          }
+          case 88: {
+            IntrinsicsImageWidth = input.ReadInt32();
+            break;
+          }
+          case 96: {
+            IntrinsicsImageHeight = input.ReadInt32();
             break;
           }
         }

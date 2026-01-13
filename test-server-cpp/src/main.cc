@@ -33,7 +33,20 @@ public:
                   << " device_id='" << device_id << "'"
                   << " ts=" << packet.timestamp()
                   << " image_bytes=" << image_bytes
-                  << std::endl;
+                  ;
+
+        if (packet.has_camera() && packet.camera().has_intrinsics()) {
+          const auto& c = packet.camera();
+          std::cout << " intrinsics={fx=" << c.focal_length_x()
+                    << ", fy=" << c.focal_length_y()
+                    << ", cx=" << c.principal_point_x()
+                    << ", cy=" << c.principal_point_y()
+                    << ", w=" << c.intrinsics_image_width()
+                    << ", h=" << c.intrinsics_image_height()
+                    << "}";
+        }
+
+        std::cout << std::endl;
       }
 
       stargazer::DataResponse resp;

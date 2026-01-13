@@ -23,14 +23,28 @@ namespace StargazerProbe.Grpc
 
         public static Stargazer.CameraFrame ToProto(StargazerProbe.Camera.CameraFrameData frame)
         {
-            return new Stargazer.CameraFrame
+            var msg = new Stargazer.CameraFrame
             {
                 ImageData = ByteString.CopyFrom(frame.ImageData ?? System.Array.Empty<byte>()),
                 Width = frame.Width,
                 Height = frame.Height,
                 Quality = frame.Quality,
-                CameraTimestamp = frame.Timestamp
+                CameraTimestamp = frame.Timestamp,
+
+                HasIntrinsics = frame.HasIntrinsics
             };
+
+            if (frame.HasIntrinsics)
+            {
+                msg.FocalLengthX = frame.Intrinsics.FocalLengthX;
+                msg.FocalLengthY = frame.Intrinsics.FocalLengthY;
+                msg.PrincipalPointX = frame.Intrinsics.PrincipalPointX;
+                msg.PrincipalPointY = frame.Intrinsics.PrincipalPointY;
+                msg.IntrinsicsImageWidth = frame.Intrinsics.ImageWidth;
+                msg.IntrinsicsImageHeight = frame.Intrinsics.ImageHeight;
+            }
+
+            return msg;
         }
     }
 }
