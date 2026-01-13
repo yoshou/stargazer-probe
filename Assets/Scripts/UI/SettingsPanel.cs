@@ -12,10 +12,12 @@ namespace StargazerProbe.UI
     /// </summary>
     public class SettingsPanel : MonoBehaviour
     {
+        // Serialized Fields - References
         [Header("References")]
         [SerializeField] private IMUSensorManager sensorManager;
         [SerializeField] private MobileCameraCapture cameraCapture;
         
+        // Serialized Fields - UI Elements
         [Header("Buttons")]
         [SerializeField] private Button backButton;
         [SerializeField] private Button saveButton;
@@ -42,6 +44,7 @@ namespace StargazerProbe.UI
         [SerializeField] private Toggle enableFrameSkipToggle;
         [SerializeField] private Toggle showDebugInfoToggle;
         
+        // Private Fields
         private SystemConfig config;
         
         private void Start()

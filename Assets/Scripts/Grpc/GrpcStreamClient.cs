@@ -19,19 +19,23 @@ namespace StargazerProbe.Grpc
 
     public sealed class GrpcStreamClient : IDisposable
     {
+        // Public Properties
+        public GrpcConnectionState State { get; private set; } = GrpcConnectionState.Disconnected;
+        public bool IsConnected => State == GrpcConnectionState.Connected && call != null;
+
+        // Events
+        public event Action<GrpcConnectionState> OnStateChanged;
+        public event Action<Stargazer.DataResponse> OnResponse;
+        public event Action<string> OnError;
+
+        // Private Fields - Context
         private readonly SynchronizationContext unityContext;
 
+        // Private Fields - gRPC
         private GrpcChannel channel;
         private Stargazer.SensorStream.SensorStreamClient client;
         private AsyncDuplexStreamingCall<Stargazer.DataPacket, Stargazer.DataResponse> call;
         private CancellationTokenSource cts;
-
-        public GrpcConnectionState State { get; private set; } = GrpcConnectionState.Disconnected;
-        public bool IsConnected => State == GrpcConnectionState.Connected && call != null;
-
-        public event Action<GrpcConnectionState> OnStateChanged;
-        public event Action<Stargazer.DataResponse> OnResponse;
-        public event Action<string> OnError;
 
         public GrpcStreamClient(SynchronizationContext unityContext)
         {

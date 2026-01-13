@@ -19,45 +19,14 @@ namespace StargazerProbe.Grpc
     /// </summary>
     public class GrpcDataStreamer : MonoBehaviour
     {
+        // Serialized Fields
         [Header("References")]
         [SerializeField] private IMUSensorManager sensorManager;
 
         [Header("Options")]
         [SerializeField] private string deviceIdOverride;
 
-        private SystemConfig config;
-        private GrpcStreamClient grpcClient;
-        private CancellationTokenSource cts;
-        private bool isStopping;
-
-        // Send queue: send in order. May accumulate depending on connection status.
-        private readonly ConcurrentQueue<Stargazer.DataPacket> sendQueue = new ConcurrentQueue<Stargazer.DataPacket>();
-        private readonly SemaphoreSlim sendSignal = new SemaphoreSlim(0);
-        private CancellationTokenSource sendLoopCts;
-        private Task sendLoopTask;
-        private int queuedPackets;
-
-        private SensorData lastSensor;
-        private bool hasSensor;
-
-        private bool wasStreamingBeforePause;
-        private bool resumePending;
-        private bool isPaused;
-
-        private int framesCaptured;
-        private int framesSent;
-        private int framesSkippedNotConnected;
-        private int framesSkippedStopping;
-        private int sendErrors;
-        private float lastStatsLogTime;
-
-        private int responsesReceived;
-        private int responsesFailed;
-        private float lastResponseSummaryLogTime;
-
-        // Drop metric: only FramesDroppedQueueOverflow (when buffer limit is exceeded) are actually discarded.
-        private int framesDroppedQueueOverflow;
-
+        // Public Properties - Statistics
         public int PendingSendOps => Volatile.Read(ref queuedPackets);
         public int FramesCaptured => framesCaptured;
         public int FramesSent => framesSent;
@@ -68,7 +37,42 @@ namespace StargazerProbe.Grpc
         public int ResponsesReceived => responsesReceived;
         public int ResponsesFailed => responsesFailed;
 
+        // Events
         public event Action<GrpcConnectionState> OnGrpcStateChanged;
+
+        // Private Fields - Core
+        private SystemConfig config;
+        private GrpcStreamClient grpcClient;
+        private CancellationTokenSource cts;
+        private bool isStopping;
+
+        // Private Fields - Send Queue
+        private readonly ConcurrentQueue<Stargazer.DataPacket> sendQueue = new ConcurrentQueue<Stargazer.DataPacket>();
+        private readonly SemaphoreSlim sendSignal = new SemaphoreSlim(0);
+        private CancellationTokenSource sendLoopCts;
+        private Task sendLoopTask;
+        private int queuedPackets;
+
+        // Private Fields - Sensor Data
+        private SensorData lastSensor;
+        private bool hasSensor;
+
+        // Private Fields - Pause/Resume
+        private bool wasStreamingBeforePause;
+        private bool resumePending;
+        private bool isPaused;
+
+        // Private Fields - Statistics
+        private int framesCaptured;
+        private int framesSent;
+        private int framesSkippedNotConnected;
+        private int framesSkippedStopping;
+        private int sendErrors;
+        private float lastStatsLogTime;
+        private int responsesReceived;
+        private int responsesFailed;
+        private float lastResponseSummaryLogTime;
+        private int framesDroppedQueueOverflow;
 
         private void Awake()
         {

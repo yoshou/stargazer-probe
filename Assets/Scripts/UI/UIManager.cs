@@ -16,10 +16,9 @@ namespace StargazerProbe.UI
     /// </summary>
     public class UIManager : MonoBehaviour
     {
+        // Serialized Fields - References
         [Header("References")]
         [SerializeField] private IMUSensorManager sensorManager;
-        private ICameraCapture cameraCapture;  // Created by factory, not serialized
-        private CameraFrameEncoder frameEncoder;  // Encoder created and managed by UIManager
         [SerializeField] private GrpcDataStreamer grpcDataStreamer;
         
         [Header("Encoder Settings")]
@@ -47,11 +46,18 @@ namespace StargazerProbe.UI
         [Header("UI - Settings Panel")]
         [SerializeField] private GameObject settingsPanel;
         
+        // Private Fields - Runtime References
+        private ICameraCapture cameraCapture;  // Created by factory
+        private CameraFrameEncoder frameEncoder;  // Created and managed by UIManager
         private SystemConfig config;
+        
+        // Private Fields - State
         private bool isRunning = false;
         private Coroutine connectionMonitorCoroutine;
         private ConnectionState lastConnectionState = ConnectionState.Disconnected;
-        private float fpsUpdateInterval = 0.5f;
+        
+        // Private Fields - FPS Tracking
+        private const float fpsUpdateInterval = 0.5f;
         private float lastFpsUpdate;
         private int frameCount;
         

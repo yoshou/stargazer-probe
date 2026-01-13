@@ -16,6 +16,7 @@ namespace StargazerProbe.Sensors
     /// </summary>
     public class IMUSensorManager : MonoBehaviour
     {
+        // Serialized Fields - Settings
         [Header("Sensor Settings")]
         [SerializeField] private float samplingRate = 100f; // Hz
         
@@ -24,23 +25,25 @@ namespace StargazerProbe.Sensors
         [SerializeField] private bool enableGyroscope = true;
         [SerializeField] private bool enableMagnetometer = true;
         
-        // Sensor data
+        // Public Properties - Sensor Data
         public Vector3 Acceleration { get; private set; }
         public Vector3 Gyroscope { get; private set; }
         public Vector3 Magnetometer { get; private set; }
         public Vector3 Gravity { get; private set; }
         
-        // Sensor state
+        // Public Properties - Sensor State
         public bool IsAccelerometerAvailable { get; private set; }
         public bool IsGyroscopeAvailable { get; private set; }
         public bool IsMagnetometerAvailable { get; private set; }
         
-        // Event
+        // Events
         public event Action<SensorData> OnSensorDataUpdated;
         
+        // Private Fields - Update Timing
         private float updateInterval;
         private float lastUpdateTime;
 
+        // Private Fields - Input System Sensors
     #if ENABLE_INPUT_SYSTEM
         private InputSystemAccelerometer accelerometer;
         private InputSystemGyroscope gyroscope;

@@ -16,6 +16,7 @@ namespace StargazerProbe.Camera
     /// </summary>
     public class MobileCameraCapture : MonoBehaviour, ICameraCapture
     {
+        // Serialized Fields - Settings
         [Header("Camera Settings")]
         [SerializeField] private int width = 1280;
         [SerializeField] private int height = 720;
@@ -27,23 +28,12 @@ namespace StargazerProbe.Camera
         
         [Header("Performance")]
         [SerializeField] private int maxSkipFrames = 3;
-
         [Tooltip("JPEG encode backlog limit. Frames are skipped when exceeded")]
         [SerializeField] private int maxPendingEncodes = 2;
-
         [Tooltip("Number of pixel buffers for encoding. More reduces GC but uses more memory")]
         [SerializeField] private int encoderBufferCount = 3;
         
-        // Camera
-        private WebCamTexture webCamTexture;
-
-        private int bufferWidth;
-        private int bufferHeight;
-
-        private readonly object bufferLock = new object();
-        private Queue<Color32[]> availableBuffers;
-        
-        // State
+        // Public Properties - State
         public bool IsCapturing { get; private set; }
         public float ActualFPS { get; private set; }
         public int SkippedFrames { get; private set; }
@@ -54,7 +44,14 @@ namespace StargazerProbe.Camera
         public event Action OnCaptureStopped;
         public event Action<string> OnCaptureStartFailed;
         
-        // Internal variables
+        // Private Fields - Camera
+        private WebCamTexture webCamTexture;
+        private int bufferWidth;
+        private int bufferHeight;
+        private readonly object bufferLock = new object();
+        private Queue<Color32[]> availableBuffers;
+        
+        // Private Fields - Capture State
         private float captureInterval;
         private float lastCaptureTime;
         private int consecutiveSkips;

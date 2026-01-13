@@ -8,6 +8,7 @@ namespace StargazerProbe.Config
     /// </summary>
     public class SystemConfig : MonoBehaviour
     {
+        // Static Instance
         private static SystemConfig instance;
         public static SystemConfig Instance
         {
@@ -23,7 +24,7 @@ namespace StargazerProbe.Config
             }
         }
         
-        // Settings data
+        // Public Properties - Settings Data
         public ServerConfig Server { get; private set; }
         public CameraConfig Camera { get; private set; }
         public SensorConfig Sensor { get; private set; }

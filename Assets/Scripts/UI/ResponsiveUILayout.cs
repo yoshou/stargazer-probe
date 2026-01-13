@@ -4,12 +4,14 @@ namespace StargazerProbe.UI
 {
     public class ResponsiveUILayout : MonoBehaviour
     {
+        // Serialized Fields - References
         [Header("References")]
         [SerializeField] private RectTransform cameraPreviewPanel;
         [SerializeField] private RectTransform controlPanel;
         [SerializeField] private RectTransform buttonsPanel;
         [SerializeField] private RectTransform infoPanel;
 
+        // Serialized Fields - Info Text References
         [Header("Info Text")]
         [SerializeField] private RectTransform connectionStatus;
         [SerializeField] private RectTransform fpsCounter;
@@ -18,6 +20,7 @@ namespace StargazerProbe.UI
         [SerializeField] private RectTransform gyroText;
         [SerializeField] private RectTransform magText;
 
+        // Serialized Fields - Sizing
         [Header("Sizing")]
         [SerializeField] private float portraitControlHeight = 360f;
         [SerializeField] private float landscapeControlHeight = 220f;
@@ -27,6 +30,7 @@ namespace StargazerProbe.UI
         [SerializeField] private float landscapeButtonsWidth = 720f;
         [SerializeField] private float landscapeInfoYOffset = 12f;
 
+        // Private Fields - Screen Tracking
         private int lastWidth;
         private int lastHeight;
 

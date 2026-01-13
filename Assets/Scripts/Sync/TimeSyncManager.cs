@@ -9,6 +9,7 @@ namespace StargazerProbe.Sync
     /// </summary>
     public class TimeSyncManager : MonoBehaviour
     {
+        // Static Instance
         private static TimeSyncManager instance;
         public static TimeSyncManager Instance
         {
@@ -24,6 +25,7 @@ namespace StargazerProbe.Sync
             }
         }
         
+        // Private Fields - Time Tracking
         private double startTime;
         private double unixEpoch;
         

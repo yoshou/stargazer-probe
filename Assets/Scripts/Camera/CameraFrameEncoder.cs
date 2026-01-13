@@ -9,17 +9,21 @@ namespace StargazerProbe.Camera
 {
     public sealed class CameraFrameEncoder : IDisposable
     {
+        // Public Properties
+        public int PendingCount => Volatile.Read(ref pendingEncodes);
+
+        // Events
+        public event Action<CameraFrameData> OnFrameEncoded;
+
+        // Private Fields - Queue
         private readonly ConcurrentQueue<EncodeJob> encodeQueue = new ConcurrentQueue<EncodeJob>();
         private readonly SemaphoreSlim encodeSignal = new SemaphoreSlim(0);
         private readonly SynchronizationContext unityContext;
 
+        // Private Fields - Encoding Task
         private CancellationTokenSource encodeCts;
         private Task encodeTask;
         private int pendingEncodes;
-
-        public event Action<CameraFrameData> OnFrameEncoded;
-
-        public int PendingCount => Volatile.Read(ref pendingEncodes);
 
         public CameraFrameEncoder(SynchronizationContext unityContext = null)
         {

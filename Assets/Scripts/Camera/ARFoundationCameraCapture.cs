@@ -18,9 +18,11 @@ namespace StargazerProbe.Camera
     /// </summary>
     public class ARFoundationCameraCapture : MonoBehaviour, ICameraCapture
     {
+        // Serialized Fields - References
         [Header("AR Components")]
         [SerializeField] private ARCameraManager arCameraManager;
 
+        // Serialized Fields - Settings
         [Header("Preview")]
         [Tooltip("Disable ARCameraBackground to prevent camera feed from appearing in background for UI preview")]
         [SerializeField] private bool disableARCameraBackground = true;
@@ -38,7 +40,7 @@ namespace StargazerProbe.Camera
         [SerializeField] private int maxSkipFrames = 3;
         [SerializeField] private int maxPendingEncodes = 2;
         
-        // State
+        // Public Properties - State
         public bool IsCapturing { get; private set; }
         public float ActualFPS { get; private set; }
         public int SkippedFrames { get; private set; }
@@ -49,19 +51,19 @@ namespace StargazerProbe.Camera
         public event Action OnCaptureStopped;
         public event Action<string> OnCaptureStartFailed;
         
-        // Internal variables
+        // Private Fields - Capture State
         private float captureInterval;
         private float lastCaptureTime;
         private int consecutiveSkips;
+        
+        // Private Fields - Preview
         private Texture2D previewTexture;
-
         private int previewWidth;
         private int previewHeight;
         
-        // Camera intrinsic parameters
+        // Private Fields - Camera Intrinsics
         private CameraIntrinsics currentIntrinsics;
         private bool hasIntrinsics;
-
         private float lastCpuImageErrorLogTime;
         
         private void Awake()
