@@ -12,7 +12,7 @@ using InputSystemGravitySensor = UnityEngine.InputSystem.GravitySensor;
 namespace StargazerProbe.Sensors
 {
     /// <summary>
-    /// IMUセンサー（加速度、ジャイロ、磁力計）を統合管理するクラス
+    /// Manages IMU sensors (accelerometer, gyroscope, magnetometer)
     /// </summary>
     public class IMUSensorManager : MonoBehaviour
     {
@@ -24,18 +24,18 @@ namespace StargazerProbe.Sensors
         [SerializeField] private bool enableGyroscope = true;
         [SerializeField] private bool enableMagnetometer = true;
         
-        // センサーデータ
+        // Sensor data
         public Vector3 Acceleration { get; private set; }
         public Vector3 Gyroscope { get; private set; }
         public Vector3 Magnetometer { get; private set; }
         public Vector3 Gravity { get; private set; }
         
-        // センサー状態
+        // Sensor state
         public bool IsAccelerometerAvailable { get; private set; }
         public bool IsGyroscopeAvailable { get; private set; }
         public bool IsMagnetometerAvailable { get; private set; }
         
-        // イベント
+        // Event
         public event Action<SensorData> OnSensorDataUpdated;
         
         private float updateInterval;
@@ -112,7 +112,7 @@ namespace StargazerProbe.Sensors
             Debug.Log($"IMU Sensors initialized (Input System) - Sampling Rate: {samplingRate}Hz");
 #else
             // Legacy Input API
-            // 加速度センサー
+            // Accelerometer
             if (enableAccelerometer)
             {
                 IsAccelerometerAvailable = SystemInfo.supportsAccelerometer;
@@ -122,7 +122,7 @@ namespace StargazerProbe.Sensors
                 }
             }
             
-            // ジャイロスコープ
+            // Gyroscope
             if (enableGyroscope)
             {
                 IsGyroscopeAvailable = SystemInfo.supportsGyroscope;
@@ -137,7 +137,7 @@ namespace StargazerProbe.Sensors
                 }
             }
             
-            // 磁力計（コンパス）
+            // Magnetometer (compass)
             if (enableMagnetometer)
             {
                 Input.compass.enabled = true;
@@ -151,7 +151,7 @@ namespace StargazerProbe.Sensors
         
         private void Update()
         {
-            // 指定されたサンプリングレートでデータを更新
+            // Update data at specified sampling rate
             if (Time.time - lastUpdateTime >= updateInterval)
             {
                 UpdateSensorData();
@@ -162,25 +162,25 @@ namespace StargazerProbe.Sensors
         private void UpdateSensorData()
         {
 #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
-            // 加速度
+            // Acceleration
             if (enableAccelerometer && IsAccelerometerAvailable)
             {
                 Acceleration = accelerometer.acceleration.ReadValue();
             }
 
-            // ジャイロ（rad/s）
+            // Gyroscope (rad/s)
             if (enableGyroscope && IsGyroscopeAvailable)
             {
                 Gyroscope = gyroscope.angularVelocity.ReadValue();
             }
 
-            // 磁場
+            // Magnetic field
             if (enableMagnetometer && IsMagnetometerAvailable)
             {
                 Magnetometer = magneticFieldSensor.magneticField.ReadValue();
             }
 
-            // 重力
+            // Gravity
             if (gravitySensor != null)
             {
                 Gravity = gravitySensor.gravity.ReadValue();
@@ -216,7 +216,7 @@ namespace StargazerProbe.Sensors
             }
 #endif
             
-            // イベント発火
+            // Fire event
             OnSensorDataUpdated?.Invoke(new SensorData
             {
                 Timestamp = Time.realtimeSinceStartup,
@@ -228,7 +228,7 @@ namespace StargazerProbe.Sensors
         }
         
         /// <summary>
-        /// サンプリングレートを動的に変更
+        /// Dynamically change sampling rate
         /// </summary>
         public void SetSamplingRate(float rate)
         {
@@ -245,7 +245,7 @@ namespace StargazerProbe.Sensors
         }
         
         /// <summary>
-        /// センサーの有効/無効を切り替え
+        /// Enable/disable sensor
         /// </summary>
         public void SetSensorEnabled(SensorType sensorType, bool enabled)
         {
@@ -295,7 +295,7 @@ namespace StargazerProbe.Sensors
         
         private void OnDestroy()
         {
-            // センサーのクリーンアップ
+            // Sensor cleanup
 #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
             if (accelerometer != null) InputSystem.DisableDevice(accelerometer);
             if (gyroscope != null) InputSystem.DisableDevice(gyroscope);
@@ -330,7 +330,7 @@ namespace StargazerProbe.Sensors
     }
     
     /// <summary>
-    /// センサーデータ構造体
+    /// Sensor data structure
     /// </summary>
     [Serializable]
     public struct SensorData
@@ -343,7 +343,7 @@ namespace StargazerProbe.Sensors
     }
     
     /// <summary>
-    /// センサータイプ列挙型
+    /// Sensor type enumeration
     /// </summary>
     public enum SensorType
     {

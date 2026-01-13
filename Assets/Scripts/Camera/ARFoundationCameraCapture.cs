@@ -10,11 +10,11 @@ using Unity.Collections;
 namespace StargazerProbe.Camera
 {
     /// <summary>
-    /// ARFoundationを使用したカメラキャプチャとJPEG圧縮を管理するクラス。
+    /// Manages camera capture and JPEG compression using ARFoundation.
     /// 
-    /// - ARFoundationのカメラ画像とカメラ内部パラメータを取得
-    /// - JPEGエンコードはバックグラウンドで実行
-    /// - エンコードが追いつかない場合はフレームを間引く
+    /// - Acquires camera images and intrinsic parameters from ARFoundation
+    /// - JPEG encoding runs in background
+    /// - Frames are skipped when encoding cannot keep up
     /// </summary>
     public class ARFoundationCameraCapture : MonoBehaviour, ICameraCapture
     {
@@ -22,7 +22,7 @@ namespace StargazerProbe.Camera
         [SerializeField] private ARCameraManager arCameraManager;
 
         [Header("Preview")]
-        [Tooltip("UIプレビューで表示するため、ARCameraBackgroundを無効化して背景にカメラ映像が出ないようにする")]
+        [Tooltip("Disable ARCameraBackground to prevent camera feed from appearing in background for UI preview")]
         [SerializeField] private bool disableARCameraBackground = true;
         
         [Header("Camera Settings")]
@@ -38,18 +38,18 @@ namespace StargazerProbe.Camera
         [SerializeField] private int maxSkipFrames = 3;
         [SerializeField] private int maxPendingEncodes = 2;
         
-        // 状態
+        // State
         public bool IsCapturing { get; private set; }
         public float ActualFPS { get; private set; }
         public int SkippedFrames { get; private set; }
         
-        // イベント
+        // Events
         public event Action<RawCameraFrameData> OnFrameCaptured;
         public event Action OnCaptureStarted;
         public event Action OnCaptureStopped;
         public event Action<string> OnCaptureStartFailed;
         
-        // 内部変数
+        // Internal variables
         private float captureInterval;
         private float lastCaptureTime;
         private int consecutiveSkips;
@@ -58,7 +58,7 @@ namespace StargazerProbe.Camera
         private int previewWidth;
         private int previewHeight;
         
-        // カメラ内部パラメータ
+        // Camera intrinsic parameters
         private CameraIntrinsics currentIntrinsics;
         private bool hasIntrinsics;
 
@@ -68,7 +68,7 @@ namespace StargazerProbe.Camera
         {
             captureInterval = 1f / targetFPS;
             
-            // ARCameraManagerを自動検索
+            // Auto-search for ARCameraManager
             if (arCameraManager == null)
             {
                 arCameraManager = FindAnyObjectByType<ARCameraManager>();
@@ -77,7 +77,7 @@ namespace StargazerProbe.Camera
 
         private void Start()
         {
-            // 背景描画を無効化（UI RawImageでプレビュー表示するため）
+            // Disable background rendering (use UI RawImage for preview display)
             if (disableARCameraBackground)
             {
                 if (arCameraManager != null)
@@ -92,7 +92,7 @@ namespace StargazerProbe.Camera
         }
         
         /// <summary>
-        /// カメラを初期化して開始
+        /// Initialize and start camera
         /// </summary>
         public void StartCapture()
         {
@@ -117,10 +117,10 @@ namespace StargazerProbe.Camera
         
         private IEnumerator InitializeARCamera()
         {
-            // ARセッションが開始されるまで待機
+            // Wait for AR session to start
             yield return new WaitForSeconds(0.5f);
             
-            // 最適な解像度を選択して設定
+            // Select and set optimal resolution
             if (arCameraManager.subsystem != null)
             {
                 using (var configs = arCameraManager.GetConfigurations(Allocator.Temp))
@@ -138,8 +138,8 @@ namespace StargazerProbe.Camera
                             int diffH = Mathf.Abs(config.height - targetHeight);
                             int diffFPS = config.framerate.HasValue ? Mathf.Abs(config.framerate.Value - targetFPS) : 0;
                             
-                            // スコア計算: 解像度の一致を最優先し、FPSも考慮する
-                            // 解像度が違うとペナルティ大
+                            // Score calculation: prioritize resolution match, also consider FPS
+                            // Large penalty for resolution mismatch
                             int score = (diffW * 10) + (diffH * 10) + diffFPS;
 
                             Debug.Log($" - {config.width}x{config.height} @ {config.framerate}fps (Score: {score})");
@@ -157,7 +157,7 @@ namespace StargazerProbe.Camera
                 }
             }
 
-            // フレーム受信イベントを登録
+            // Register frame receive event
             arCameraManager.frameReceived += OnCameraFrameReceived;
             
             IsCapturing = true;
@@ -172,10 +172,10 @@ namespace StargazerProbe.Camera
             if (!IsCapturing)
                 return;
             
-            // FPS計算
+            // FPS calculation
             ActualFPS = 1f / Time.deltaTime;
             
-            // 指定された間隔でキャプチャ
+            // Capture at specified interval
             if (Time.unscaledTime - lastCaptureTime >= captureInterval)
             {
                 CaptureFrame(eventArgs);
@@ -189,16 +189,16 @@ namespace StargazerProbe.Camera
             {
                 consecutiveSkips = 0;
                 
-                // カメラ画像を取得
+                // Get camera image
                 if (!arCameraManager.TryAcquireLatestCpuImage(out XRCpuImage image))
                     return;
                 
                 try
                 {
-                    // カメラ内部パラメータを取得（CPU画像を再取得しない）
+                    // Get camera intrinsic parameters (do not reacquire CPU image)
                     UpdateIntrinsics(image.width, image.height);
                     
-                    // 画像データをColor32配列に変換
+                    // Convert image data to Color32 array
                     var conversionParams = new XRCpuImage.ConversionParams
                     {
                         inputRect = new RectInt(0, 0, image.width, image.height),
@@ -212,7 +212,7 @@ namespace StargazerProbe.Camera
                     
                     image.Convert(conversionParams, buffer);
                     
-                    // Color32配列に変換
+                    // Convert to Color32 array
                     Color32[] pixels = new Color32[image.width * image.height];
 
                     var pixelArray = new NativeArray<Color32>(image.width * image.height, Allocator.Temp);
@@ -228,10 +228,10 @@ namespace StargazerProbe.Camera
                         buffer.Dispose();
                     }
 
-                    // UIプレビュー用テクスチャを更新（メインスレッド）
+                    // Update UI preview texture (main thread)
                     UpdatePreviewTexture(image.width, image.height, pixels);
                     
-                    // 生データをイベントで発行
+                    // Emit raw data via event
                     OnFrameCaptured?.Invoke(new RawCameraFrameData
                     {
                         Timestamp = Time.realtimeSinceStartup,
@@ -239,12 +239,12 @@ namespace StargazerProbe.Camera
                         Height = image.height,
                         Pixels = pixels,
                         Intrinsics = hasIntrinsics ? currentIntrinsics : default,
-                        ReturnBufferCallback = null  // ARFoundationはバッファプーリングなし
+                        ReturnBufferCallback = null  // ARFoundation has no buffer pooling
                     });
                 }
                 catch (InvalidOperationException ex)
                 {
-                    // 一部端末/起動直後に一時的に発生しうるため、ログを間引く
+                    // Can occur temporarily on some devices / right after startup, so throttle logs
                     const float logIntervalSeconds = 2f;
                     float now = Time.realtimeSinceStartup;
                     if (now - lastCpuImageErrorLogTime >= logIntervalSeconds)
@@ -276,7 +276,7 @@ namespace StargazerProbe.Camera
                 return;
             }
 
-            // ARFoundation標準APIで内部パラメータを取得（CPU画像の再取得はしない）
+            // Get intrinsic parameters using ARFoundation standard API (do not reacquire CPU image)
             if (arCameraManager.TryGetIntrinsics(out XRCameraIntrinsics intrinsics))
             {
                 currentIntrinsics = new CameraIntrinsics
@@ -298,7 +298,7 @@ namespace StargazerProbe.Camera
         }
 
         /// <summary>
-        /// カメラを停止
+        /// Stop camera
         /// </summary>
         public void StopCapture()
         {
@@ -317,11 +317,11 @@ namespace StargazerProbe.Camera
         }
 
         /// <summary>
-        /// カメラ設定を変更
+        /// Change camera settings
         /// </summary>
         public void UpdateSettings(int newWidth, int newHeight, int newFPS, int newQuality)
         {
-            // ARFoundationでは解像度は変更できないため、FPSと品質のみ更新
+            // ARFoundation cannot change resolution, so update only FPS and quality
             targetFPS = newFPS;
             jpegQuality = Mathf.Clamp(newQuality, 1, 100);
             captureInterval = 1f / targetFPS;
@@ -330,7 +330,7 @@ namespace StargazerProbe.Camera
         }
 
         /// <summary>
-        /// プレビュー用のテクスチャを取得
+        /// Get texture for preview
         /// </summary>
         public Texture GetPreviewTexture()
         {

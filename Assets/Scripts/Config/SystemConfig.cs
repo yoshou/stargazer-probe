@@ -4,7 +4,7 @@ using UnityEngine;
 namespace StargazerProbe.Config
 {
     /// <summary>
-    /// システム設定を管理するクラス（永続化対応）
+    /// Manages system settings (with persistence)
     /// </summary>
     public class SystemConfig : MonoBehaviour
     {
@@ -23,7 +23,7 @@ namespace StargazerProbe.Config
             }
         }
         
-        // 設定データ
+        // Settings data
         public ServerConfig Server { get; private set; }
         public CameraConfig Camera { get; private set; }
         public SensorConfig Sensor { get; private set; }
@@ -44,7 +44,7 @@ namespace StargazerProbe.Config
         }
         
         /// <summary>
-        /// 設定を読み込む
+        /// Load settings
         /// </summary>
         public void LoadSettings()
         {
@@ -84,7 +84,7 @@ namespace StargazerProbe.Config
         }
         
         /// <summary>
-        /// 設定を保存する
+        /// Save settings
         /// </summary>
         public void SaveSettings()
         {
@@ -117,7 +117,7 @@ namespace StargazerProbe.Config
         }
         
         /// <summary>
-        /// 設定をデフォルトに戻す
+        /// Reset settings to defaults
         /// </summary>
         public void ResetToDefaults()
         {
@@ -128,7 +128,7 @@ namespace StargazerProbe.Config
     }
     
     /// <summary>
-    /// サーバー設定
+    /// Server settings
     /// </summary>
     [Serializable]
     public class ServerConfig
@@ -140,7 +140,7 @@ namespace StargazerProbe.Config
     }
     
     /// <summary>
-    /// カメラ設定
+    /// Camera settings
     /// </summary>
     [Serializable]
     public class CameraConfig
@@ -152,7 +152,7 @@ namespace StargazerProbe.Config
     }
     
     /// <summary>
-    /// センサー設定
+    /// Sensor settings
     /// </summary>
     [Serializable]
     public class SensorConfig
@@ -164,7 +164,7 @@ namespace StargazerProbe.Config
     }
     
     /// <summary>
-    /// 詳細設定
+    /// Advanced settings
     /// </summary>
     [Serializable]
     public class AdvancedConfig

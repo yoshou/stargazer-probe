@@ -8,7 +8,7 @@ using StargazerProbe.Camera;
 namespace StargazerProbe.UI
 {
     /// <summary>
-    /// 設定画面を管理するクラス
+    /// Manages the settings panel
     /// </summary>
     public class SettingsPanel : MonoBehaviour
     {

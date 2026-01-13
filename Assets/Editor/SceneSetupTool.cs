@@ -11,7 +11,7 @@ using UnityEngine.InputSystem.UI;
 namespace StargazerProbe.Editor
 {
     /// <summary>
-    /// シーンのUI構造を自動生成するエディタースクリプト
+    /// Editor script to automatically generate UI structure in the scene
     /// </summary>
     public class SceneSetupTool : EditorWindow
     {
@@ -30,21 +30,21 @@ namespace StargazerProbe.Editor
 
         private static void CleanupExistingObjects()
         {
-            // 全てのCanvasを削除
+            // Delete all Canvas objects
             Canvas[] canvases = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
             foreach (Canvas canvas in canvases)
             {
                 Object.DestroyImmediate(canvas.gameObject);
             }
             
-            // 各コンポーネントを持つGameObjectを全て削除
+            // Delete all GameObjects with specific components
             IMUSensorManager[] sensorManagers = Object.FindObjectsByType<IMUSensorManager>(FindObjectsSortMode.None);
             foreach (var comp in sensorManagers)
             {
                 Object.DestroyImmediate(comp.gameObject);
             }
             
-            // ICameraCapture実装クラスを削除
+            // Delete ICameraCapture implementations
             MobileCameraCapture[] mobileCaptures = Object.FindObjectsByType<MobileCameraCapture>(FindObjectsSortMode.None);
             foreach (var comp in mobileCaptures)
             {
@@ -65,20 +65,10 @@ namespace StargazerProbe.Editor
             
             Debug.Log("Cleanup completed");
         }
-        
-        private static void CleanupComponents<T>() where T : Component
-        {
-            T[] components = Object.FindObjectsByType<T>(FindObjectsSortMode.None);
-            foreach (T component in components)
-            {
-                Object.DestroyImmediate(component.gameObject);
-                Debug.Log($"Deleted {typeof(T).Name}");
-            }
-        }
 
         private static void CreateSceneStructure()
         {
-            // 0. EventSystem (UIに必須)
+            // 0. EventSystem (required for UI)
             CreateEventSystem();
             
             // Setup Main Camera (Black Background)
@@ -106,7 +96,7 @@ namespace StargazerProbe.Editor
             SettingsPanel settingsPanelComp = settingsPanel.GetComponent<SettingsPanel>();
             SerializedObject spSo = new SerializedObject(settingsPanelComp);
             spSo.FindProperty("sensorManager").objectReferenceValue = sensorManager.GetComponent<IMUSensorManager>();
-            // ICameraCaptureを取得（MobileCameraCapture or ARFoundationCameraCapture）
+            // Get ICameraCapture (MobileCameraCapture or ARFoundationCameraCapture)
             Component cameraCaptureComp = cameraCapture.GetComponent<MobileCameraCapture>() as Component 
                 ?? cameraCapture.GetComponent<ARFoundationCameraCapture>() as Component;
             spSo.FindProperty("cameraCapture").objectReferenceValue = cameraCaptureComp;
@@ -143,7 +133,7 @@ namespace StargazerProbe.Editor
 
         private static void CreateEventSystem()
         {
-            // 既存のEventSystemがあれば削除
+            // Delete existing EventSystem if any
             UnityEngine.EventSystems.EventSystem existingEventSystem = Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>();
             if (existingEventSystem != null)
             {
@@ -181,7 +171,7 @@ namespace StargazerProbe.Editor
             mainCam.clearFlags = CameraClearFlags.SolidColor;
             mainCam.backgroundColor = new Color(0.2f, 0.2f, 0.2f);
             
-            // Reset position mainly to be tidy
+            // Reset position for consistency
             mainCam.transform.position = new Vector3(0, 0, -10f);
             mainCam.transform.rotation = Quaternion.identity;
             
@@ -190,7 +180,7 @@ namespace StargazerProbe.Editor
 
         private static void SetupARFoundation()
         {
-            // CameraCaptureFactoryの設定を確認
+            // Check CameraCaptureFactory settings
             var captureType = CameraCaptureFactory.GetActiveCaptureType();
             
             if (captureType != CameraCaptureFactory.CaptureType.ARFoundation)
@@ -201,7 +191,7 @@ namespace StargazerProbe.Editor
             
             Debug.Log("Setting up AR Foundation...");
             
-            // AR Sessionを作成
+            // Create AR Session
             GameObject arSession = GameObject.Find("AR Session");
             if (arSession == null)
             {
@@ -210,14 +200,14 @@ namespace StargazerProbe.Editor
                 Debug.Log("AR Session created");
             }
             
-            // XR Originを作成
+            // Create XR Origin
             GameObject xrOrigin = GameObject.Find("XR Origin");
             if (xrOrigin == null)
             {
                 xrOrigin = new GameObject("XR Origin");
-                var xrOriginComponent = xrOrigin.AddComponent<UnityEngine.XR.ARFoundation.ARSessionOrigin>();
+                var xrOriginComponent = xrOrigin.AddComponent<Unity.XR.CoreUtils.XROrigin>();
                 
-                // AR Cameraを作成
+                // Create AR Camera
                 GameObject arCamera = new GameObject("AR Camera");
                 arCamera.transform.SetParent(xrOrigin.transform, false);
                 arCamera.tag = "MainCamera";
@@ -231,9 +221,9 @@ namespace StargazerProbe.Editor
                 arCamera.AddComponent<UnityEngine.XR.ARFoundation.ARCameraManager>();
                 arCamera.AddComponent<UnityEngine.XR.ARFoundation.ARCameraBackground>();
                 
-                xrOriginComponent.camera = camera;
+                xrOriginComponent.Camera = camera;
                 
-                // Main Cameraを削除
+                // Delete Main Camera
                 var mainCam = UnityEngine.Camera.main;
                 if (mainCam != null && mainCam.gameObject != arCamera)
                 {

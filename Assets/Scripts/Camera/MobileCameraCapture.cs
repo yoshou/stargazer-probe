@@ -8,11 +8,11 @@ using UnityEngine.Experimental.Rendering;
 namespace StargazerProbe.Camera
 {
     /// <summary>
-    /// モバイルカメラのキャプチャとJPEG圧縮を管理するクラス。
+    /// Manages mobile camera capture and JPEG compression.
     /// 
-    /// - ピクセル取得はメインスレッド（WebCamTextureの制約）
-    /// - JPEGエンコードはバックグラウンドで実行して、メインスレッドのフレーム落ちを抑える
-    /// - エンコードが追いつかない場合はフレームを間引く（遅延ではなくFPS維持を優先）
+    /// - Pixel acquisition on main thread (WebCamTexture constraint)
+    /// - JPEG encoding runs in background to reduce main thread frame drops
+    /// - Frames are skipped when encoding cannot keep up (prioritizes FPS over delay)
     /// </summary>
     public class MobileCameraCapture : MonoBehaviour, ICameraCapture
     {
@@ -28,13 +28,13 @@ namespace StargazerProbe.Camera
         [Header("Performance")]
         [SerializeField] private int maxSkipFrames = 3;
 
-        [Tooltip("JPEGエンコードのバックログ上限。超えたらフレームを間引く")]
+        [Tooltip("JPEG encode backlog limit. Frames are skipped when exceeded")]
         [SerializeField] private int maxPendingEncodes = 2;
 
-        [Tooltip("エンコード用ピクセルバッファ数。多いほどGCを抑えつつ追従しやすいがメモリを使う")]
+        [Tooltip("Number of pixel buffers for encoding. More reduces GC but uses more memory")]
         [SerializeField] private int encoderBufferCount = 3;
         
-        // カメラ
+        // Camera
         private WebCamTexture webCamTexture;
 
         private int bufferWidth;
@@ -43,18 +43,18 @@ namespace StargazerProbe.Camera
         private readonly object bufferLock = new object();
         private Queue<Color32[]> availableBuffers;
         
-        // 状態
+        // State
         public bool IsCapturing { get; private set; }
         public float ActualFPS { get; private set; }
         public int SkippedFrames { get; private set; }
         
-        // イベント
+        // Events
         public event Action<RawCameraFrameData> OnFrameCaptured;
         public event Action OnCaptureStarted;
         public event Action OnCaptureStopped;
         public event Action<string> OnCaptureStartFailed;
         
-        // 内部変数
+        // Internal variables
         private float captureInterval;
         private float lastCaptureTime;
         private int consecutiveSkips;
@@ -65,7 +65,7 @@ namespace StargazerProbe.Camera
         }
         
         /// <summary>
-        /// カメラを初期化して開始
+        /// Initialize and start camera
         /// </summary>
         public void StartCapture()
         {
@@ -80,7 +80,7 @@ namespace StargazerProbe.Camera
         
         private IEnumerator InitializeCamera()
         {
-            // カメラデバイスを取得
+            // Get camera device
             WebCamDevice[] devices = WebCamTexture.devices;
             if (devices.Length == 0)
             {
@@ -89,7 +89,7 @@ namespace StargazerProbe.Camera
                 yield break;
             }
             
-            // リアカメラを優先的に選択
+            // Prefer rear camera
             string deviceName = devices[0].name;
             foreach (var device in devices)
             {
@@ -102,11 +102,11 @@ namespace StargazerProbe.Camera
             
             Debug.Log($"Using camera: {deviceName}");
             
-            // WebCamTextureを初期化
+            // Initialize WebCamTexture
             webCamTexture = new WebCamTexture(deviceName, width, height, targetFPS);
             webCamTexture.Play();
 
-            // カメラが起動し、解像度が確定するまで待機
+            // Wait for camera to start and resolution to be determined
             const float timeoutSeconds = 3f;
             float startWait = Time.realtimeSinceStartup;
             while (webCamTexture != null && webCamTexture.isPlaying && (webCamTexture.width <= 16 || webCamTexture.height <= 16))
@@ -123,7 +123,7 @@ namespace StargazerProbe.Camera
                 yield break;
             }
             
-            // キャプチャ用テクスチャを作成
+            // Create capture texture
             int w = webCamTexture.width;
             int h = webCamTexture.height;
 
@@ -149,9 +149,9 @@ namespace StargazerProbe.Camera
             if (!IsCapturing || webCamTexture == null || !webCamTexture.isPlaying)
                 return;
 
-            // 画面回転などでカメラの実解像度が変わることがある。
-            // バッファが古いと内部で確保が走ったり、データが欠落するので作り直す。
-            // （この再構築は、エンコードループを停止→キューを排出→バッファを作り直す流れ。）
+            // Screen rotation can change camera's actual resolution.
+            // If buffer is old, internal allocation will occur or data will be corrupted, so rebuild.
+            // (This reconstruction: stop encode loop → drain queue → rebuild buffers.)
             int w = webCamTexture.width;
             int h = webCamTexture.height;
             if (w > 16 && h > 16 && (w != bufferWidth || h != bufferHeight))
@@ -159,10 +159,10 @@ namespace StargazerProbe.Camera
                 RebuildEncoderBuffers(w, h);
             }
             
-            // FPS計算
+            // FPS calculation
             ActualFPS = 1f / Time.deltaTime;
             
-            // 指定された間隔でキャプチャ
+            // Capture at specified interval
             if (Time.unscaledTime - lastCaptureTime >= captureInterval)
             {
                 CaptureFrame();
@@ -197,20 +197,20 @@ namespace StargazerProbe.Camera
 
             consecutiveSkips = 0;
 
-            // WebCamTextureからのピクセル取得はメインスレッドでしか安全に呼べない。
+            // Pixel acquisition from WebCamTexture can only be safely called on main thread.
             buffer = webCamTexture.GetPixels32(buffer);
 
             int w = webCamTexture.width;
             int h = webCamTexture.height;
 
-            // 生データをイベントで発行
+            // Emit raw data via event
             OnFrameCaptured?.Invoke(new RawCameraFrameData
             {
                 Timestamp = Time.realtimeSinceStartup,
                 Width = w,
                 Height = h,
                 Pixels = buffer,
-                Intrinsics = default,  // MobileCameraCaptureは内部パラメータを取得しない
+                Intrinsics = default,  // MobileCameraCapture does not acquire intrinsic parameters
                 ReturnBufferCallback = ReturnPixelBuffer
             });
         }
@@ -233,7 +233,7 @@ namespace StargazerProbe.Camera
             if (buffer == null || availableBuffers == null)
                 return;
 
-            // 解像度変更などでサイズ不一致のバッファが返ってきた場合は再利用しない。
+            // Do not reuse buffers with size mismatch due to resolution change.
             int expected = bufferWidth > 0 && bufferHeight > 0 ? bufferWidth * bufferHeight : buffer.Length;
             if (buffer.Length != expected)
                 return;
@@ -245,7 +245,7 @@ namespace StargazerProbe.Camera
         }
         
         /// <summary>
-        /// カメラを停止
+        /// Stop camera
         /// </summary>
         public void StopCapture()
         {
@@ -266,7 +266,7 @@ namespace StargazerProbe.Camera
         }
         
         /// <summary>
-        /// カメラ設定を変更
+        /// Change camera settings
         /// </summary>
         public void UpdateSettings(int newWidth, int newHeight, int newFPS, int newQuality)
         {
@@ -290,7 +290,7 @@ namespace StargazerProbe.Camera
         }
         
         /// <summary>
-        /// プレビュー用のテクスチャを取得
+        /// Get texture for preview
         /// </summary>
         public Texture GetPreviewTexture()
         {

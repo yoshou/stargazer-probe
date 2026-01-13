@@ -3,12 +3,12 @@ using UnityEngine;
 namespace StargazerProbe.Camera
 {
     /// <summary>
-    /// カメラキャプチャの実装を切り替えるファクトリークラス
+    /// Factory class to switch camera capture implementation
     /// </summary>
     public static class CameraCaptureFactory
     {
         /// <summary>
-        /// 使用するカメラキャプチャのタイプ
+        /// Type of camera capture to use
         /// </summary>
         public enum CaptureType
         {
@@ -16,15 +16,15 @@ namespace StargazerProbe.Camera
             ARFoundation    // ARFoundationCameraCapture
         }
         
-        // ハードコーディングで切り替える設定
-        // ここを変更してビルドすることで実装を切り替え
+        // Hard-coded setting to switch implementation
+        // Change this and rebuild to switch implementation
         private const CaptureType ACTIVE_CAPTURE_TYPE = CaptureType.ARFoundation;
         
         /// <summary>
-        /// 指定されたGameObjectに適切なカメラキャプチャコンポーネントを追加
+        /// Add appropriate camera capture component to specified GameObject
         /// </summary>
-        /// <param name="gameObject">コンポーネントを追加するGameObject</param>
-        /// <returns>追加されたICameraCaptureの実装</returns>
+        /// <param name="gameObject">GameObject to add component to</param>
+        /// <returns>Added ICameraCapture implementation</returns>
         public static ICameraCapture CreateCameraCapture(GameObject gameObject)
         {
             if (gameObject == null)
@@ -33,20 +33,20 @@ namespace StargazerProbe.Camera
                 return null;
             }
             
-            // 起動時にどの実装が使用されるか明示
+            // Show which implementation is used at startup
             Debug.Log($"[CameraCaptureFactory] CreateCameraCapture type={ACTIVE_CAPTURE_TYPE}");
             
-            // 既存のカメラキャプチャコンポーネントを削除
+            // Remove existing camera capture components
             RemoveExistingCaptures(gameObject);
             
             ICameraCapture capture = null;
             
-#pragma warning disable CS0162 // 到達不可能コード検出を無効化
+#pragma warning disable CS0162 // Disable unreachable code detection
             switch (ACTIVE_CAPTURE_TYPE)
             {
                 case CaptureType.Mobile:
                     Debug.Log("[CameraCaptureFactory] Adding MobileCameraCapture");
-                    // WebCamTexture使用時はAR機能を停止・無効化する
+                    // Stop/disable AR features when using WebCamTexture
                     DisableARComponents();
                     capture = gameObject.AddComponent<MobileCameraCapture>();
                     break;
@@ -67,7 +67,7 @@ namespace StargazerProbe.Camera
 
         private static void DisableARComponents()
         {
-            // Mobile(WebCamTexture)モード時はAR機能と競合するため無効化
+            // Disable AR features to avoid conflicts with Mobile(WebCamTexture) mode
             var arSession = Object.FindAnyObjectByType<UnityEngine.XR.ARFoundation.ARSession>();
             if (arSession != null)
             {
@@ -75,7 +75,7 @@ namespace StargazerProbe.Camera
                 Debug.Log("[CameraCaptureFactory] Disabled ARSession (Mobile mode)");
             }
 
-            // ARCameraBackgroundを無効化（背景にカメラ映像が表示されるのを防ぐ）
+            // Disable ARCameraBackground (prevent camera feed from appearing in background)
             var backgrounds = Object.FindObjectsByType<UnityEngine.XR.ARFoundation.ARCameraBackground>(FindObjectsSortMode.None);
             foreach (var bg in backgrounds)
             {
@@ -84,7 +84,7 @@ namespace StargazerProbe.Camera
         }
         
         /// <summary>
-        /// 既存のカメラキャプチャコンポーネントをすべて削除
+        /// Remove all existing camera capture components
         /// </summary>
         private static void RemoveExistingCaptures(GameObject gameObject)
         {
@@ -102,7 +102,7 @@ namespace StargazerProbe.Camera
         }
         
         /// <summary>
-        /// 現在アクティブなキャプチャタイプを取得
+        /// Get currently active capture type
         /// </summary>
         public static CaptureType GetActiveCaptureType()
         {

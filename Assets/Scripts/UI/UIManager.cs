@@ -12,14 +12,14 @@ using System.Threading.Tasks;
 namespace StargazerProbe.UI
 {
     /// <summary>
-    /// メインUIを管理するクラス
+    /// Manages the main UI
     /// </summary>
     public class UIManager : MonoBehaviour
     {
         [Header("References")]
         [SerializeField] private IMUSensorManager sensorManager;
-        private ICameraCapture cameraCapture;  // ファクトリーで作成するため、Serializeしない
-        private CameraFrameEncoder frameEncoder;  // EncoderをUIManagerが作成して管理
+        private ICameraCapture cameraCapture;  // Created by factory, not serialized
+        private CameraFrameEncoder frameEncoder;  // Encoder created and managed by UIManager
         [SerializeField] private GrpcDataStreamer grpcDataStreamer;
         
         [Header("Encoder Settings")]
@@ -65,7 +65,7 @@ namespace StargazerProbe.UI
             Application.SetStackTraceLogType(LogType.Warning, StackTraceLogType.None);
             Application.SetStackTraceLogType(LogType.Error, StackTraceLogType.ScriptOnly);
 
-            // カメラキャプチャをファクトリーで作成
+            // Create camera capture using factory
             cameraCapture = CameraCaptureFactory.CreateCameraCapture(gameObject);
             if (cameraCapture == null)
             {
@@ -73,16 +73,16 @@ namespace StargazerProbe.UI
             }
             else
             {
-                // CameraFrameEncoderを作成
+                // Create CameraFrameEncoder
                 frameEncoder = new CameraFrameEncoder(System.Threading.SynchronizationContext.Current);
                 frameEncoder.Start();
                 
-                // コールバックチェーンを設定: Capture → Encoder → Grpc
+                // Set up callback chain: Capture → Encoder → Grpc
                 
-                // 1. Captureの生データをEncoderに渡す
+                // 1. Pass raw data from Capture to Encoder
                 cameraCapture.OnFrameCaptured += (rawData) =>
                 {
-                    // 生データをEncoderにエンキュー
+                    // Enqueue raw data to encoder
                     frameEncoder.TryEnqueue(
                         rawData.Timestamp,
                         rawData.Width,
@@ -93,13 +93,13 @@ namespace StargazerProbe.UI
                         rawData.ReturnBufferCallback);
                 };
                 
-                // 2. Encoderのエンコード済みデータをGrpcに渡す
+                // 2. Pass encoded data from Encoder to Grpc
                 frameEncoder.OnFrameEncoded += (frameData) =>
                 {
-                    // UIプレビュー用のコールバック
+                    // Callback for UI preview
                     OnFrameCaptured(frameData);
                     
-                    // Grpcに送信
+                    // Send to Grpc
                     if (grpcDataStreamer != null)
                     {
                         grpcDataStreamer.SendFrameData(frameData);
@@ -125,7 +125,7 @@ namespace StargazerProbe.UI
             InitializeUI();
             SetupEventListeners();
 
-            // アプリ起動直後からカメラキャプチャを開始 (プレビュー表示のため)
+            // Start camera capture immediately after app start (for preview display)
             if (cameraCapture != null)
             {
                 cameraCapture.StartCapture();
@@ -134,7 +134,7 @@ namespace StargazerProbe.UI
         
         private void InitializeUI()
         {
-            // 初期状態
+            // Initial state
             if (settingsPanel != null)
             {
                 settingsPanel.SetActive(false);
@@ -149,7 +149,7 @@ namespace StargazerProbe.UI
         
         private void SetupEventListeners()
         {
-            // ボタンイベント
+            // Button events
             if (startStopButton != null)
             {
                 startStopButton.onClick.AddListener(OnStartStopButtonClicked);
@@ -168,7 +168,7 @@ namespace StargazerProbe.UI
                 Debug.LogError("ERROR: SettingsButton is null!");
             }
             
-            // センサーイベント
+            // Sensor events
             if (sensorManager != null)
             {
                 sensorManager.OnSensorDataUpdated += OnSensorDataUpdated;
@@ -205,9 +205,9 @@ namespace StargazerProbe.UI
             if (queueSizeText == null)
                 return;
 
-            // レイアウト崩れを避けるため、表示は短く保つ。
-            // ここで表示している Drop は「送信キューが上限を超えたため古いパケットを捨てた回数」。
-            // ネットワーク切断・送信エラー（SendErrors）とは別の指標。
+            // Keep display short to avoid layout issues.
+            // Drop shows "number of times packets were discarded due to send queue overflow".
+            // This is separate from network disconnection/send errors.
             int dropped = grpcDataStreamer != null ? grpcDataStreamer.FramesDroppedQueueOverflow : 0;
             queueSizeText.text = $"Drop: {dropped}";
         }
@@ -237,7 +237,7 @@ namespace StargazerProbe.UI
                 var fitter = cameraPreviewImage.GetComponent<AspectRatioFitter>();
                 if (fitter != null) Destroy(fitter);
 
-                // アンカーを中央に設定してsizeDeltaで絶対サイズ指定
+                // Set anchor to center and specify absolute size with sizeDelta
                 RectTransform rt = cameraPreviewImage.rectTransform;
                 rt.anchorMin = new Vector2(0.5f, 0.5f);
                 rt.anchorMax = new Vector2(0.5f, 0.5f);
@@ -247,10 +247,10 @@ namespace StargazerProbe.UI
                 int angle = webCam.videoRotationAngle;
                 bool isMirrored = webCam.videoVerticallyMirrored;
 
-                // 回転
+                // Rotation
                 rt.localEulerAngles = new Vector3(0, 0, -angle);
 
-                // ミラーリング
+                // Mirroring
                 Vector3 scale = Vector3.one;
                 if (isMirrored)
                 {
@@ -258,7 +258,7 @@ namespace StargazerProbe.UI
                 }
                 rt.localScale = scale;
 
-                // アスペクト比を維持してサイズ調整
+                // Adjust size while maintaining aspect ratio
                 RectTransform parentRect = cameraPreviewImage.transform.parent as RectTransform;
                 if (parentRect == null) return;
 
@@ -269,7 +269,7 @@ namespace StargazerProbe.UI
                 float videoWidth = webCam.width;
                 float videoHeight = webCam.height;
 
-                // 回転後の表示サイズ
+                // Size after rotation
                 float visualVideoWidth, visualVideoHeight;
                 if (Mathf.Abs(angle) == 90 || Mathf.Abs(angle) == 270)
                 {
@@ -282,7 +282,7 @@ namespace StargazerProbe.UI
                     visualVideoHeight = videoHeight;
                 }
 
-                // 画面内に収める（黒帯あり）
+                // Fit within screen (with letterboxing)
                 float widthRatio = parentWidth / visualVideoWidth;
                 float heightRatio = parentHeight / visualVideoHeight;
                 
@@ -292,7 +292,7 @@ namespace StargazerProbe.UI
             }
             else
             {
-                // ARFoundation: UI側で回転とアスペクト比を調整
+                // ARFoundation: Adjust rotation and aspect ratio on UI side
                 var fitter = cameraPreviewImage.GetComponent<AspectRatioFitter>();
                 if (fitter != null) Destroy(fitter);
 
@@ -302,13 +302,13 @@ namespace StargazerProbe.UI
                 rt.pivot = new Vector2(0.5f, 0.5f);
                 rt.anchoredPosition = Vector2.zero;
 
-                // 画面向きに応じて回転とミラーリングを調整
+                // Adjust rotation and mirroring based on screen orientation
                 int angle = 0;
-                Vector3 scale = new Vector3(-1f, 1f, 1f); // X軸反転でミラーリング補正
+                Vector3 scale = new Vector3(-1f, 1f, 1f); // X-axis flip for mirroring correction
 
                 if (Screen.orientation == ScreenOrientation.Portrait || Screen.orientation == ScreenOrientation.PortraitUpsideDown)
                 {
-                    angle = -90; // 縦向きは90度回転
+                    angle = -90; // Rotate 90 degrees for portrait
                 }
 
                 rt.localEulerAngles = new Vector3(0, 0, -angle);
@@ -323,7 +323,7 @@ namespace StargazerProbe.UI
                 float texWidth = previewTexture.width;
                 float texHeight = previewTexture.height;
 
-                // 回転後の表示サイズ
+                // Size after rotation
                 float visualWidth, visualHeight;
                 if (Mathf.Abs(angle) == 90 || Mathf.Abs(angle) == 270)
                 {
@@ -347,13 +347,13 @@ namespace StargazerProbe.UI
 
         private void OnDestroy()
         {
-            // イベントリスナーのクリーンアップ
+            // Cleanup event listeners
             if (sensorManager != null)
             {
                 sensorManager.OnSensorDataUpdated -= OnSensorDataUpdated;
             }
 
-            // FrameEncoderの停止とDispose
+            // Stop and dispose FrameEncoder
             if (frameEncoder != null)
             {
                 frameEncoder.Stop();
@@ -364,7 +364,7 @@ namespace StargazerProbe.UI
         
         private void OnSensorDataUpdated(SensorData data)
         {
-            // センサー値を表示
+            // Display sensor values
             if (accelText != null)
             {
                 accelText.text = $"Accel: {data.Acceleration.x:F2}, {data.Acceleration.y:F2}, {data.Acceleration.z:F2}";
@@ -381,7 +381,7 @@ namespace StargazerProbe.UI
         
         private void OnFrameCaptured(CameraFrameData frameData)
         {
-            // フレームキャプチャ時のコールバック（統計情報の更新はUpdatePipelineStatsで実施）
+            // Callback on frame capture (stats updated in UpdatePipelineStats)
         }
         
         private void OnStartStopButtonClicked()
@@ -406,7 +406,7 @@ namespace StargazerProbe.UI
                 grpcDataStreamer.StartStreaming("UI StartCapture");
             }
 
-            // カメラキャプチャはStart()で既に開始済み
+            // Camera capture already started in Start()
             
             UpdateStartStopButton(true);
             if (recordingIndicator != null)
@@ -418,7 +418,7 @@ namespace StargazerProbe.UI
         
         private void StopCapture()
         {
-            // gRPC送信のみ停止、カメラキャプチャとプレビューは継続
+            // Stop only gRPC sending, continue camera capture and preview
             if (grpcDataStreamer != null)
             {
                 grpcDataStreamer.StopStreaming("UI StopCapture", disableAutoResume: true);
@@ -597,7 +597,7 @@ namespace StargazerProbe.UI
     }
     
     /// <summary>
-    /// 接続状態の列挙型
+    /// Connection state enumeration
     /// </summary>
     public enum ConnectionState
     {

@@ -10,12 +10,12 @@ using StargazerProbe.Sensors;
 namespace StargazerProbe.Grpc
 {
     /// <summary>
-    /// カメラフレーム + 最新IMUをまとめて gRPC (Duplex Streaming) で送信する。
+    /// Sends camera frames + latest IMU via gRPC (Duplex Streaming).
     /// 
-    /// 送信は「遅延許容・ドロップ最小化」方針：
-    /// - OnFrameCaptured では送信せず、送信キューに積むだけ
-    /// - バックグラウンド送信ループが順番に SendAsync する
-    /// - キューが上限を超えた場合のみ、古いパケットから捨てる（メモリ上限を守るため）
+    /// Sending policy: "delay-tolerant, minimize drops":
+    /// - OnFrameCaptured does not send immediately; just enqueues to send queue
+    /// - Background send loop calls SendAsync in order
+    /// - Only discards old packets when queue exceeds limit (to preserve memory limit)
     /// </summary>
     public class GrpcDataStreamer : MonoBehaviour
     {
@@ -30,7 +30,7 @@ namespace StargazerProbe.Grpc
         private CancellationTokenSource cts;
         private bool isStopping;
 
-        // 送信キュー：順序を保って送る。接続状況により滞留することがある。
+        // Send queue: send in order. May accumulate depending on connection status.
         private readonly ConcurrentQueue<Stargazer.DataPacket> sendQueue = new ConcurrentQueue<Stargazer.DataPacket>();
         private readonly SemaphoreSlim sendSignal = new SemaphoreSlim(0);
         private CancellationTokenSource sendLoopCts;
@@ -55,7 +55,7 @@ namespace StargazerProbe.Grpc
         private int responsesFailed;
         private float lastResponseSummaryLogTime;
 
-        // Drop 指標：実際に捨てるのは FramesDroppedQueueOverflow（バッファ上限超過時）のみ。
+        // Drop metric: only FramesDroppedQueueOverflow (when buffer limit is exceeded) are actually discarded.
         private int framesDroppedQueueOverflow;
 
         public int PendingSendOps => Volatile.Read(ref queuedPackets);
@@ -283,8 +283,8 @@ namespace StargazerProbe.Grpc
         }
 
         /// <summary>
-        /// 外部からカメラフレームデータを受け取るための公開メソッド
-        /// UIManagerからコールバックチェーン経由で呼ばれる
+        /// Public method to receive camera frame data from external sources
+        /// Called via callback chain from UIManager
         /// </summary>
         public void SendFrameData(CameraFrameData frameData)
         {

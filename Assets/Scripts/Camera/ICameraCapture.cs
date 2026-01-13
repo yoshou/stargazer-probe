@@ -4,23 +4,23 @@ using UnityEngine;
 namespace StargazerProbe.Camera
 {
     /// <summary>
-    /// カメラキャプチャの共通インターフェース
-    /// MobileCameraCapture と ARFoundationCameraCapture の両方で使用
+    /// Common interface for camera capture
+    /// Used by both MobileCameraCapture and ARFoundationCameraCapture
     /// </summary>
     public interface ICameraCapture
     {
-        // プロパティ
+        // Properties
         bool IsCapturing { get; }
         float ActualFPS { get; }
         int SkippedFrames { get; }
         
-        // イベント
+        // Events
         event Action<RawCameraFrameData> OnFrameCaptured;
         event Action OnCaptureStarted;
         event Action OnCaptureStopped;
         event Action<string> OnCaptureStartFailed;
         
-        // メソッド
+        // Methods
         void StartCapture();
         void StopCapture();
         void UpdateSettings(int newWidth, int newHeight, int newFPS, int newQuality);

@@ -4,7 +4,7 @@ using UnityEngine;
 namespace StargazerProbe.Camera
 {
     /// <summary>
-    /// カメラ内部パラメータ
+    /// Camera intrinsic parameters
     /// </summary>
     [Serializable]
     public struct CameraIntrinsics
@@ -18,8 +18,8 @@ namespace StargazerProbe.Camera
     }
 
     /// <summary>
-    /// 生のカメラフレームデータ（エンコード前）
-    /// Captureから直接出力されるデータ
+    /// Raw camera frame data (before encoding)
+    /// Data output directly from Capture
     /// </summary>
     [Serializable]
     public struct RawCameraFrameData
@@ -29,12 +29,12 @@ namespace StargazerProbe.Camera
         public int Height;
         public Color32[] Pixels;
         public CameraIntrinsics Intrinsics;
-        public System.Action<Color32[]> ReturnBufferCallback;  // バッファプーリング用
+        public System.Action<Color32[]> ReturnBufferCallback;  // For buffer pooling
     }
 
     /// <summary>
-    /// エンコード済みカメラフレームデータ
-    /// Encoderから出力されるデータ
+    /// Encoded camera frame data
+    /// Data output from Encoder
     /// </summary>
     [Serializable]
     public struct CameraFrameData

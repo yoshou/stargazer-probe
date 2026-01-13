@@ -4,8 +4,8 @@ using UnityEngine;
 namespace StargazerProbe.Sync
 {
     /// <summary>
-    /// 時刻同期を管理するクラス
-    /// センサーとカメラの統一タイムスタンプを提供
+    /// Manages time synchronization
+    /// Provides unified timestamps for sensors and camera
     /// </summary>
     public class TimeSyncManager : MonoBehaviour
     {
@@ -45,7 +45,7 @@ namespace StargazerProbe.Sync
         {
             startTime = Time.realtimeSinceStartupAsDouble;
             
-            // Unix エポック（1970/1/1 00:00:00 UTC）
+            // Unix epoch (1970/1/1 00:00:00 UTC)
             DateTime epochStart = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             unixEpoch = (DateTime.UtcNow - epochStart).TotalSeconds;
             
@@ -53,7 +53,7 @@ namespace StargazerProbe.Sync
         }
         
         /// <summary>
-        /// 現在のUnixタイムスタンプを取得（秒）
+        /// Get current Unix timestamp (seconds)
         /// </summary>
         public double GetCurrentTimestamp()
         {
@@ -62,7 +62,7 @@ namespace StargazerProbe.Sync
         }
         
         /// <summary>
-        /// アプリ起動からの相対時刻を取得（秒）
+        /// Get relative time since app start (seconds)
         /// </summary>
         public double GetRelativeTimestamp()
         {
@@ -70,7 +70,7 @@ namespace StargazerProbe.Sync
         }
         
         /// <summary>
-        /// 高精度タイムスタンプ（ミリ秒）
+        /// High-precision timestamp (milliseconds)
         /// </summary>
         public long GetTimestampMilliseconds()
         {
@@ -78,7 +78,7 @@ namespace StargazerProbe.Sync
         }
         
         /// <summary>
-        /// 高精度タイムスタンプ（マイクロ秒）
+        /// High-precision timestamp (microseconds)
         /// </summary>
         public long GetTimestampMicroseconds()
         {
@@ -86,7 +86,7 @@ namespace StargazerProbe.Sync
         }
         
         /// <summary>
-        /// 現在のUTC時刻を取得
+        /// Get current UTC time
         /// </summary>
         public DateTime GetCurrentUTCTime()
         {
@@ -94,7 +94,7 @@ namespace StargazerProbe.Sync
         }
         
         /// <summary>
-        /// タイムスタンプをDateTimeに変換
+        /// Convert timestamp to DateTime
         /// </summary>
         public DateTime TimestampToDateTime(double timestamp)
         {
@@ -103,7 +103,7 @@ namespace StargazerProbe.Sync
         }
         
         /// <summary>
-        /// 2つのタイムスタンプの差分を計算（ミリ秒）
+        /// Calculate time difference between two timestamps (milliseconds)
         /// </summary>
         public double GetTimeDifferenceMs(double timestamp1, double timestamp2)
         {
