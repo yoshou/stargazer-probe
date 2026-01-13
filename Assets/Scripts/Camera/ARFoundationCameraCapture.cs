@@ -1,7 +1,5 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Threading;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
@@ -10,11 +8,11 @@ using Unity.Collections;
 namespace StargazerProbe.Camera
 {
     /// <summary>
-    /// Manages camera capture and JPEG compression using ARFoundation.
+    /// Manages camera capture using ARFoundation.
     /// 
     /// - Acquires camera images and intrinsic parameters from ARFoundation
-    /// - JPEG encoding runs in background
-    /// - Frames are skipped when encoding cannot keep up
+    /// - Provides raw pixel data for encoding by other components
+    /// - Captures at specified intervals
     /// </summary>
     public class ARFoundationCameraCapture : MonoBehaviour, ICameraCapture
     {
@@ -32,14 +30,6 @@ namespace StargazerProbe.Camera
         [SerializeField] private int targetHeight = 720;
         [SerializeField] private int targetFPS = 30;
         
-        [Header("JPEG Settings")]
-        [SerializeField] private int jpegQuality = 75;
-        [SerializeField] private bool autoAdjustQuality = true;
-        
-        [Header("Performance")]
-        [SerializeField] private int maxSkipFrames = 3;
-        [SerializeField] private int maxPendingEncodes = 2;
-        
         // Public Properties - State
         public bool IsCapturing { get; private set; }
         public float ActualFPS { get; private set; }
@@ -54,7 +44,6 @@ namespace StargazerProbe.Camera
         // Private Fields - Capture State
         private float captureInterval;
         private float lastCaptureTime;
-        private int consecutiveSkips;
         
         // Private Fields - Preview
         private Texture2D previewTexture;
@@ -189,8 +178,6 @@ namespace StargazerProbe.Camera
         {
             try
             {
-                consecutiveSkips = 0;
-                
                 // Get camera image
                 if (!arCameraManager.TryAcquireLatestCpuImage(out XRCpuImage image))
                     return;
@@ -323,12 +310,11 @@ namespace StargazerProbe.Camera
         /// </summary>
         public void UpdateSettings(int newWidth, int newHeight, int newFPS, int newQuality)
         {
-            // ARFoundation cannot change resolution, so update only FPS and quality
+            // ARFoundation cannot change resolution, so update only FPS
             targetFPS = newFPS;
-            jpegQuality = Mathf.Clamp(newQuality, 1, 100);
             captureInterval = 1f / targetFPS;
 
-            Debug.Log($"AR Camera settings updated: {targetFPS}fps, quality={jpegQuality}");
+            Debug.Log($"AR Camera settings updated: {targetFPS}fps");
         }
 
         /// <summary>

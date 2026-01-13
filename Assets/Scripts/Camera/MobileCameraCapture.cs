@@ -1,18 +1,16 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Threading;
 using UnityEngine;
-using UnityEngine.Experimental.Rendering;
 
 namespace StargazerProbe.Camera
 {
     /// <summary>
-    /// Manages mobile camera capture and JPEG compression.
+    /// Manages mobile camera capture using WebCamTexture.
     /// 
     /// - Pixel acquisition on main thread (WebCamTexture constraint)
-    /// - JPEG encoding runs in background to reduce main thread frame drops
-    /// - Frames are skipped when encoding cannot keep up (prioritizes FPS over delay)
+    /// - Provides raw pixel data with buffer pooling for encoding by other components
+    /// - Handles screen rotation and resolution changes
     /// </summary>
     public class MobileCameraCapture : MonoBehaviour, ICameraCapture
     {
@@ -22,16 +20,9 @@ namespace StargazerProbe.Camera
         [SerializeField] private int height = 720;
         [SerializeField] private int targetFPS = 30;
         
-        [Header("JPEG Settings")]
-        [SerializeField] private int jpegQuality = 75;
-        [SerializeField] private bool autoAdjustQuality = true;
-        
         [Header("Performance")]
-        [SerializeField] private int maxSkipFrames = 3;
-        [Tooltip("JPEG encode backlog limit. Frames are skipped when exceeded")]
-        [SerializeField] private int maxPendingEncodes = 2;
         [Tooltip("Number of pixel buffers for encoding. More reduces GC but uses more memory")]
-        [SerializeField] private int encoderBufferCount = 3;
+        [SerializeField] private int pixelBufferCount = 3;
         
         // Public Properties - State
         public bool IsCapturing { get; private set; }
@@ -54,7 +45,6 @@ namespace StargazerProbe.Camera
         // Private Fields - Capture State
         private float captureInterval;
         private float lastCaptureTime;
-        private int consecutiveSkips;
         
         private void Awake()
         {
@@ -127,7 +117,7 @@ namespace StargazerProbe.Camera
             bufferWidth = w;
             bufferHeight = h;
 
-            int buffers = Mathf.Max(2, encoderBufferCount);
+            int buffers = Mathf.Max(2, pixelBufferCount);
             availableBuffers = new Queue<Color32[]>(buffers);
             for (int i = 0; i < buffers; i++)
             {
@@ -153,7 +143,7 @@ namespace StargazerProbe.Camera
             int h = webCamTexture.height;
             if (w > 16 && h > 16 && (w != bufferWidth || h != bufferHeight))
             {
-                RebuildEncoderBuffers(w, h);
+                RebuildPixelBuffers(w, h);
             }
             
             // FPS calculation
@@ -167,14 +157,14 @@ namespace StargazerProbe.Camera
             }
         }
 
-        private void RebuildEncoderBuffers(int w, int h)
+        private void RebuildPixelBuffers(int w, int h)
         {
             Debug.Log($"Camera resolution changed: {bufferWidth}x{bufferHeight} -> {w}x{h}. Rebuilding buffers.");
 
             bufferWidth = w;
             bufferHeight = h;
 
-            int buffers = Mathf.Max(2, encoderBufferCount);
+            int buffers = Mathf.Max(2, pixelBufferCount);
             availableBuffers = new Queue<Color32[]>(buffers);
             for (int i = 0; i < buffers; i++)
             {
@@ -187,12 +177,9 @@ namespace StargazerProbe.Camera
             Color32[] buffer = RentPixelBuffer();
             if (buffer == null)
             {
-                consecutiveSkips++;
                 SkippedFrames++;
                 return;
             }
-
-            consecutiveSkips = 0;
 
             // Pixel acquisition from WebCamTexture can only be safely called on main thread.
             buffer = webCamTexture.GetPixels32(buffer);
@@ -277,7 +264,6 @@ namespace StargazerProbe.Camera
             width = newWidth;
             height = newHeight;
             targetFPS = newFPS;
-            jpegQuality = Mathf.Clamp(newQuality, 1, 100);
             captureInterval = 1f / targetFPS;
             
             if (wasCapturing)
