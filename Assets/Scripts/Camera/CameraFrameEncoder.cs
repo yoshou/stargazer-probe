@@ -22,7 +22,7 @@ namespace StargazerProbe.Camera
 
         // Private Fields - Encoding Task
         private CancellationTokenSource encodeCts;
-        private Task encodeTask;
+        private Task[] encodeTasks;
         private int pendingEncodes;
 
         public CameraFrameEncoder(SynchronizationContext unityContext = null)
@@ -32,14 +32,30 @@ namespace StargazerProbe.Camera
 
         public void Start()
         {
-            if (encodeTask != null && !encodeTask.IsCompleted)
-                return;
+            if (encodeTasks != null)
+            {
+                bool anyRunning = false;
+                foreach (var t in encodeTasks)
+                {
+                    if (t != null && !t.IsCompleted)
+                    {
+                        anyRunning = true;
+                        break;
+                    }
+                }
+                if (anyRunning) return;
+            }
 
             encodeCts?.Cancel();
             encodeCts?.Dispose();
             encodeCts = new CancellationTokenSource();
 
-            encodeTask = Task.Run(() => EncodeLoopAsync(encodeCts.Token));
+            int workerCount = Mathf.Clamp(SystemInfo.processorCount - 1, 1, 4);
+            encodeTasks = new Task[workerCount];
+            for (int i = 0; i < workerCount; i++)
+            {
+                encodeTasks[i] = Task.Run(() => EncodeLoopAsync(encodeCts.Token));
+            }
         }
 
         public void Stop()
@@ -47,15 +63,14 @@ namespace StargazerProbe.Camera
             try
             {
                 encodeCts?.Cancel();
-                try { encodeSignal.Release(); } catch { }
             }
             catch { }
 
             try
             {
-                if (encodeTask != null)
+                if (encodeTasks != null)
                 {
-                    encodeTask.Wait(200);
+                    Task.WaitAll(encodeTasks, 200);
                 }
             }
             catch { }
@@ -68,7 +83,7 @@ namespace StargazerProbe.Camera
 
             encodeCts?.Dispose();
             encodeCts = null;
-            encodeTask = null;
+            encodeTasks = null;
         }
 
         public bool TryEnqueue(double timestamp, int width, int height, int quality, Color32[] pixels, CameraIntrinsics intrinsics, Action<Color32[]> returnBufferCallback)

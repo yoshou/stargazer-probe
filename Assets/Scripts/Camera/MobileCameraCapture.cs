@@ -22,7 +22,7 @@ namespace StargazerProbe.Camera
         
         [Header("Performance")]
         [Tooltip("Number of pixel buffers for encoding. More reduces GC but uses more memory")]
-        [SerializeField] private int pixelBufferCount = 3;
+        [SerializeField] private int pixelBufferCount = 8;
         
         // Public Properties - State
         public bool IsCapturing { get; private set; }
@@ -177,6 +177,7 @@ namespace StargazerProbe.Camera
             Color32[] buffer = RentPixelBuffer();
             if (buffer == null)
             {
+                Debug.LogWarning("[MobileCameraCapture] Pixel buffer unavailable. Skipping frame.");
                 SkippedFrames++;
                 return;
             }
