@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package stargazer;
+
+service SensorStream {
+  rpc StreamData (stream DataPacket) returns (stream DataResponse);
+}
+
+message DataPacket {
+  double timestamp = 1;          // Unix time (seconds) or any sender clock
+  SensorData sensor = 2;         // IMU data (deprecated: use imu_samples)
+  CameraFrame camera = 3;        // Camera frame
+  string device_id = 4;          // Device identifier
+  repeated SensorData imu_samples = 5;  // Accumulated IMU samples between frames
+}
+
+message SensorData {
+  Vector3 acceleration = 1;      // m/s^2
+  Vector3 gyroscope = 2;         // rad/s
+  Vector3 magnetometer = 3;      // uT
+  Vector3 gravity = 4;           // gravity direction
+}
+
+message CameraFrame {
+  bytes image_data = 1;          // JPEG bytes
+  int32 width = 2;
+  int32 height = 3;
+  int32 quality = 4;
+  double camera_timestamp = 5;
+
+  // Camera intrinsics (e.g., from ARFoundation)
+  // Values should correspond to the same resolution as image_data.
+  float focal_length_x = 7;      // fx
+  float focal_length_y = 8;      // fy
+  float principal_point_x = 9;   // cx
+  float principal_point_y = 10;  // cy
+  int32 intrinsics_image_width = 11;
+  int32 intrinsics_image_height = 12;
+
+  // Distortion coefficients (Brown–Conrady).
+  // Note: ARFoundation CPU images are typically already undistorted on ARCore,
+  // so we send zeros.
+  float distortion_k1 = 13;
+  float distortion_k2 = 14;
+  float distortion_p1 = 15;
+  float distortion_p2 = 16;
+  float distortion_k3 = 17;
+}
+
+message Pose {
+  Vector3 position = 1;
+  Quaternion rotation = 2;
+}
+
+message Quaternion {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+  float w = 4;
+}
+
+message Vector3 {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+message DataResponse {
+  bool success = 1;
+  string message = 2;
+  int32 received_packets = 3;
+}

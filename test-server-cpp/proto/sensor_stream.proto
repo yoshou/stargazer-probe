@@ -8,10 +8,10 @@ service SensorStream {
 
 message DataPacket {
   double timestamp = 1;          // Unix time (seconds) or any sender clock
-  SensorData sensor = 2;         // IMU data
+  SensorData sensor = 2;         // IMU data (deprecated: use imu_samples)
   CameraFrame camera = 3;        // Camera frame
-  Pose pose = 4;                 // Optional pose
-  string device_id = 5;          // Device identifier
+  string device_id = 4;          // Device identifier
+  repeated SensorData imu_samples = 5;  // Accumulated IMU samples between frames
 }
 
 message SensorData {

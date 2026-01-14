@@ -49,6 +49,7 @@ namespace StargazerProbe.UI
         // Private Fields - Runtime References
         private ICameraCapture cameraCapture;  // Created by factory
         private CameraFrameEncoder frameEncoder;  // Created and managed by UIManager
+        private IMUDataAccumulator imuAccumulator;  // Created and managed by UIManager
         private SystemConfig config;
         
         // Private Fields - State
@@ -83,7 +84,10 @@ namespace StargazerProbe.UI
                 frameEncoder = new CameraFrameEncoder(System.Threading.SynchronizationContext.Current);
                 frameEncoder.Start();
                 
-                // Set up callback chain: Capture → Encoder → Grpc
+                // Create IMUDataAccumulator
+                imuAccumulator = gameObject.AddComponent<IMUDataAccumulator>();
+                
+                // Set up callback chain: Capture → Encoder → IMUAccumulator → Grpc
                 
                 // 1. Pass raw data from Capture to Encoder
                 cameraCapture.OnFrameCaptured += (rawData) =>
@@ -99,16 +103,25 @@ namespace StargazerProbe.UI
                         rawData.ReturnBufferCallback);
                 };
                 
-                // 2. Pass encoded data from Encoder to Grpc
+                // 2. Pass encoded data from Encoder to IMUAccumulator
                 frameEncoder.OnFrameEncoded += (frameData) =>
                 {
                     // Callback for UI preview
                     OnFrameCaptured(frameData);
                     
-                    // Send to Grpc
+                    // Pass to IMU accumulator for combining with IMU samples
+                    if (imuAccumulator != null)
+                    {
+                        imuAccumulator.ProcessEncodedFrame(frameData);
+                    }
+                };
+                
+                // 3. Pass combined data from IMUAccumulator to Grpc
+                imuAccumulator.OnFrameWithIMUReady += (frameWithIMU) =>
+                {
                     if (grpcDataStreamer != null)
                     {
-                        grpcDataStreamer.SendFrameData(frameData);
+                        grpcDataStreamer.SendFrameWithIMU(frameWithIMU);
                     }
                 };
             }
@@ -384,11 +397,7 @@ namespace StargazerProbe.UI
                 magText.text = $"Mag:   {data.Magnetometer.x:F1}, {data.Magnetometer.y:F1}, {data.Magnetometer.z:F1}";
             }
             
-            // Forward sensor data to GrpcDataStreamer
-            if (grpcDataStreamer != null)
-            {
-                grpcDataStreamer.UpdateSensorData(data);
-            }
+            // Note: Sensor data is now accumulated by IMUDataAccumulator, not forwarded here
         }
         
         private void OnFrameCaptured(CameraFrameData frameData)
@@ -413,6 +422,12 @@ namespace StargazerProbe.UI
             isRunning = true;
             StartConnectionMonitoring();
 
+            // Enable IMU accumulation
+            if (imuAccumulator != null)
+            {
+                imuAccumulator.SetAccumulating(true);
+            }
+
             if (grpcDataStreamer != null)
             {
                 grpcDataStreamer.StartStreaming("UI StartCapture");
@@ -430,6 +445,12 @@ namespace StargazerProbe.UI
         
         private void StopCapture()
         {
+            // Disable IMU accumulation
+            if (imuAccumulator != null)
+            {
+                imuAccumulator.SetAccumulating(false);
+            }
+
             // Stop only gRPC sending, continue camera capture and preview
             if (grpcDataStreamer != null)
             {

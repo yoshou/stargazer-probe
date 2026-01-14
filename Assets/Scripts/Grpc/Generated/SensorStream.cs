@@ -24,35 +24,36 @@ namespace Stargazer {
     static SensorStreamReflection() {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
-            "ChNzZW5zb3Jfc3RyZWFtLnByb3RvEglzdGFyZ2F6ZXIioAEKCkRhdGFQYWNr",
+            "ChNzZW5zb3Jfc3RyZWFtLnByb3RvEglzdGFyZ2F6ZXIirQEKCkRhdGFQYWNr",
             "ZXQSEQoJdGltZXN0YW1wGAEgASgBEiUKBnNlbnNvchgCIAEoCzIVLnN0YXJn",
             "YXplci5TZW5zb3JEYXRhEiYKBmNhbWVyYRgDIAEoCzIWLnN0YXJnYXplci5D",
-            "YW1lcmFGcmFtZRIdCgRwb3NlGAQgASgLMg8uc3RhcmdhemVyLlBvc2USEQoJ",
-            "ZGV2aWNlX2lkGAUgASgJIqwBCgpTZW5zb3JEYXRhEigKDGFjY2VsZXJhdGlv",
-            "bhgBIAEoCzISLnN0YXJnYXplci5WZWN0b3IzEiUKCWd5cm9zY29wZRgCIAEo",
-            "CzISLnN0YXJnYXplci5WZWN0b3IzEigKDG1hZ25ldG9tZXRlchgDIAEoCzIS",
-            "LnN0YXJnYXplci5WZWN0b3IzEiMKB2dyYXZpdHkYBCABKAsyEi5zdGFyZ2F6",
-            "ZXIuVmVjdG9yMyKFAwoLQ2FtZXJhRnJhbWUSEgoKaW1hZ2VfZGF0YRgBIAEo",
-            "DBINCgV3aWR0aBgCIAEoBRIOCgZoZWlnaHQYAyABKAUSDwoHcXVhbGl0eRgE",
-            "IAEoBRIYChBjYW1lcmFfdGltZXN0YW1wGAUgASgBEhYKDmZvY2FsX2xlbmd0",
-            "aF94GAcgASgCEhYKDmZvY2FsX2xlbmd0aF95GAggASgCEhkKEXByaW5jaXBh",
-            "bF9wb2ludF94GAkgASgCEhkKEXByaW5jaXBhbF9wb2ludF95GAogASgCEh4K",
-            "FmludHJpbnNpY3NfaW1hZ2Vfd2lkdGgYCyABKAUSHwoXaW50cmluc2ljc19p",
-            "bWFnZV9oZWlnaHQYDCABKAUSFQoNZGlzdG9ydGlvbl9rMRgNIAEoAhIVCg1k",
-            "aXN0b3J0aW9uX2syGA4gASgCEhUKDWRpc3RvcnRpb25fcDEYDyABKAISFQoN",
-            "ZGlzdG9ydGlvbl9wMhgQIAEoAhIVCg1kaXN0b3J0aW9uX2szGBEgASgCIlUK",
-            "BFBvc2USJAoIcG9zaXRpb24YASABKAsyEi5zdGFyZ2F6ZXIuVmVjdG9yMxIn",
-            "Cghyb3RhdGlvbhgCIAEoCzIVLnN0YXJnYXplci5RdWF0ZXJuaW9uIjgKClF1",
-            "YXRlcm5pb24SCQoBeBgBIAEoAhIJCgF5GAIgASgCEgkKAXoYAyABKAISCQoB",
-            "dxgEIAEoAiIqCgdWZWN0b3IzEgkKAXgYASABKAISCQoBeRgCIAEoAhIJCgF6",
-            "GAMgASgCIkoKDERhdGFSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg8KB21l",
-            "c3NhZ2UYAiABKAkSGAoQcmVjZWl2ZWRfcGFja2V0cxgDIAEoBTJQCgxTZW5z",
-            "b3JTdHJlYW0SQAoKU3RyZWFtRGF0YRIVLnN0YXJnYXplci5EYXRhUGFja2V0",
-            "Ghcuc3RhcmdhemVyLkRhdGFSZXNwb25zZSgBMAFiBnByb3RvMw=="));
+            "YW1lcmFGcmFtZRIRCglkZXZpY2VfaWQYBCABKAkSKgoLaW11X3NhbXBsZXMY",
+            "BSADKAsyFS5zdGFyZ2F6ZXIuU2Vuc29yRGF0YSKsAQoKU2Vuc29yRGF0YRIo",
+            "CgxhY2NlbGVyYXRpb24YASABKAsyEi5zdGFyZ2F6ZXIuVmVjdG9yMxIlCgln",
+            "eXJvc2NvcGUYAiABKAsyEi5zdGFyZ2F6ZXIuVmVjdG9yMxIoCgxtYWduZXRv",
+            "bWV0ZXIYAyABKAsyEi5zdGFyZ2F6ZXIuVmVjdG9yMxIjCgdncmF2aXR5GAQg",
+            "ASgLMhIuc3RhcmdhemVyLlZlY3RvcjMihQMKC0NhbWVyYUZyYW1lEhIKCmlt",
+            "YWdlX2RhdGEYASABKAwSDQoFd2lkdGgYAiABKAUSDgoGaGVpZ2h0GAMgASgF",
+            "Eg8KB3F1YWxpdHkYBCABKAUSGAoQY2FtZXJhX3RpbWVzdGFtcBgFIAEoARIW",
+            "Cg5mb2NhbF9sZW5ndGhfeBgHIAEoAhIWCg5mb2NhbF9sZW5ndGhfeRgIIAEo",
+            "AhIZChFwcmluY2lwYWxfcG9pbnRfeBgJIAEoAhIZChFwcmluY2lwYWxfcG9p",
+            "bnRfeRgKIAEoAhIeChZpbnRyaW5zaWNzX2ltYWdlX3dpZHRoGAsgASgFEh8K",
+            "F2ludHJpbnNpY3NfaW1hZ2VfaGVpZ2h0GAwgASgFEhUKDWRpc3RvcnRpb25f",
+            "azEYDSABKAISFQoNZGlzdG9ydGlvbl9rMhgOIAEoAhIVCg1kaXN0b3J0aW9u",
+            "X3AxGA8gASgCEhUKDWRpc3RvcnRpb25fcDIYECABKAISFQoNZGlzdG9ydGlv",
+            "bl9rMxgRIAEoAiJVCgRQb3NlEiQKCHBvc2l0aW9uGAEgASgLMhIuc3Rhcmdh",
+            "emVyLlZlY3RvcjMSJwoIcm90YXRpb24YAiABKAsyFS5zdGFyZ2F6ZXIuUXVh",
+            "dGVybmlvbiI4CgpRdWF0ZXJuaW9uEgkKAXgYASABKAISCQoBeRgCIAEoAhIJ",
+            "CgF6GAMgASgCEgkKAXcYBCABKAIiKgoHVmVjdG9yMxIJCgF4GAEgASgCEgkK",
+            "AXkYAiABKAISCQoBehgDIAEoAiJKCgxEYXRhUmVzcG9uc2USDwoHc3VjY2Vz",
+            "cxgBIAEoCBIPCgdtZXNzYWdlGAIgASgJEhgKEHJlY2VpdmVkX3BhY2tldHMY",
+            "AyABKAUyUAoMU2Vuc29yU3RyZWFtEkAKClN0cmVhbURhdGESFS5zdGFyZ2F6",
+            "ZXIuRGF0YVBhY2tldBoXLnN0YXJnYXplci5EYXRhUmVzcG9uc2UoATABYgZw",
+            "cm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::Stargazer.DataPacket), global::Stargazer.DataPacket.Parser, new[]{ "Timestamp", "Sensor", "Camera", "Pose", "DeviceId" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Stargazer.DataPacket), global::Stargazer.DataPacket.Parser, new[]{ "Timestamp", "Sensor", "Camera", "DeviceId", "ImuSamples" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Stargazer.SensorData), global::Stargazer.SensorData.Parser, new[]{ "Acceleration", "Gyroscope", "Magnetometer", "Gravity" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Stargazer.CameraFrame), global::Stargazer.CameraFrame.Parser, new[]{ "ImageData", "Width", "Height", "Quality", "CameraTimestamp", "FocalLengthX", "FocalLengthY", "PrincipalPointX", "PrincipalPointY", "IntrinsicsImageWidth", "IntrinsicsImageHeight", "DistortionK1", "DistortionK2", "DistortionP1", "DistortionP2", "DistortionK3" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Stargazer.Pose), global::Stargazer.Pose.Parser, new[]{ "Position", "Rotation" }, null, null, null, null),
@@ -65,7 +66,6 @@ namespace Stargazer {
 
   }
   #region Messages
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class DataPacket : pb::IMessage<DataPacket>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -103,8 +103,8 @@ namespace Stargazer {
       timestamp_ = other.timestamp_;
       sensor_ = other.sensor_ != null ? other.sensor_.Clone() : null;
       camera_ = other.camera_ != null ? other.camera_.Clone() : null;
-      pose_ = other.pose_ != null ? other.pose_.Clone() : null;
       deviceId_ = other.deviceId_;
+      imuSamples_ = other.imuSamples_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -133,7 +133,7 @@ namespace Stargazer {
     public const int SensorFieldNumber = 2;
     private global::Stargazer.SensorData sensor_;
     /// <summary>
-    /// IMU data
+    /// IMU data (deprecated: use imu_samples)
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -159,23 +159,8 @@ namespace Stargazer {
       }
     }
 
-    /// <summary>Field number for the "pose" field.</summary>
-    public const int PoseFieldNumber = 4;
-    private global::Stargazer.Pose pose_;
-    /// <summary>
-    /// Optional pose
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Stargazer.Pose Pose {
-      get { return pose_; }
-      set {
-        pose_ = value;
-      }
-    }
-
     /// <summary>Field number for the "device_id" field.</summary>
-    public const int DeviceIdFieldNumber = 5;
+    public const int DeviceIdFieldNumber = 4;
     private string deviceId_ = "";
     /// <summary>
     /// Device identifier
@@ -187,6 +172,20 @@ namespace Stargazer {
       set {
         deviceId_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
       }
+    }
+
+    /// <summary>Field number for the "imu_samples" field.</summary>
+    public const int ImuSamplesFieldNumber = 5;
+    private static readonly pb::FieldCodec<global::Stargazer.SensorData> _repeated_imuSamples_codec
+        = pb::FieldCodec.ForMessage(42, global::Stargazer.SensorData.Parser);
+    private readonly pbc::RepeatedField<global::Stargazer.SensorData> imuSamples_ = new pbc::RepeatedField<global::Stargazer.SensorData>();
+    /// <summary>
+    /// Accumulated IMU samples between frames
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Stargazer.SensorData> ImuSamples {
+      get { return imuSamples_; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -207,8 +206,8 @@ namespace Stargazer {
       if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(Timestamp, other.Timestamp)) return false;
       if (!object.Equals(Sensor, other.Sensor)) return false;
       if (!object.Equals(Camera, other.Camera)) return false;
-      if (!object.Equals(Pose, other.Pose)) return false;
       if (DeviceId != other.DeviceId) return false;
+      if(!imuSamples_.Equals(other.imuSamples_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -219,8 +218,8 @@ namespace Stargazer {
       if (Timestamp != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(Timestamp);
       if (sensor_ != null) hash ^= Sensor.GetHashCode();
       if (camera_ != null) hash ^= Camera.GetHashCode();
-      if (pose_ != null) hash ^= Pose.GetHashCode();
       if (DeviceId.Length != 0) hash ^= DeviceId.GetHashCode();
+      hash ^= imuSamples_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -251,14 +250,11 @@ namespace Stargazer {
         output.WriteRawTag(26);
         output.WriteMessage(Camera);
       }
-      if (pose_ != null) {
-        output.WriteRawTag(34);
-        output.WriteMessage(Pose);
-      }
       if (DeviceId.Length != 0) {
-        output.WriteRawTag(42);
+        output.WriteRawTag(34);
         output.WriteString(DeviceId);
       }
+      imuSamples_.WriteTo(output, _repeated_imuSamples_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -281,14 +277,11 @@ namespace Stargazer {
         output.WriteRawTag(26);
         output.WriteMessage(Camera);
       }
-      if (pose_ != null) {
-        output.WriteRawTag(34);
-        output.WriteMessage(Pose);
-      }
       if (DeviceId.Length != 0) {
-        output.WriteRawTag(42);
+        output.WriteRawTag(34);
         output.WriteString(DeviceId);
       }
+      imuSamples_.WriteTo(ref output, _repeated_imuSamples_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -308,12 +301,10 @@ namespace Stargazer {
       if (camera_ != null) {
         size += 1 + pb::CodedOutputStream.ComputeMessageSize(Camera);
       }
-      if (pose_ != null) {
-        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Pose);
-      }
       if (DeviceId.Length != 0) {
         size += 1 + pb::CodedOutputStream.ComputeStringSize(DeviceId);
       }
+      size += imuSamples_.CalculateSize(_repeated_imuSamples_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -341,15 +332,10 @@ namespace Stargazer {
         }
         Camera.MergeFrom(other.Camera);
       }
-      if (other.pose_ != null) {
-        if (pose_ == null) {
-          Pose = new global::Stargazer.Pose();
-        }
-        Pose.MergeFrom(other.Pose);
-      }
       if (other.DeviceId.Length != 0) {
         DeviceId = other.DeviceId;
       }
+      imuSamples_.Add(other.imuSamples_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -361,11 +347,7 @@ namespace Stargazer {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
+        switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -388,14 +370,11 @@ namespace Stargazer {
             break;
           }
           case 34: {
-            if (pose_ == null) {
-              Pose = new global::Stargazer.Pose();
-            }
-            input.ReadMessage(Pose);
+            DeviceId = input.ReadString();
             break;
           }
           case 42: {
-            DeviceId = input.ReadString();
+            imuSamples_.AddEntriesFrom(input, _repeated_imuSamples_codec);
             break;
           }
         }
@@ -409,11 +388,7 @@ namespace Stargazer {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
+        switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -436,14 +411,11 @@ namespace Stargazer {
             break;
           }
           case 34: {
-            if (pose_ == null) {
-              Pose = new global::Stargazer.Pose();
-            }
-            input.ReadMessage(Pose);
+            DeviceId = input.ReadString();
             break;
           }
           case 42: {
-            DeviceId = input.ReadString();
+            imuSamples_.AddEntriesFrom(ref input, _repeated_imuSamples_codec);
             break;
           }
         }
@@ -453,7 +425,6 @@ namespace Stargazer {
 
   }
 
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class SensorData : pb::IMessage<SensorData>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -720,11 +691,7 @@ namespace Stargazer {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
+        switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -767,11 +734,7 @@ namespace Stargazer {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
+        switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -810,7 +773,6 @@ namespace Stargazer {
 
   }
 
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class CameraFrame : pb::IMessage<CameraFrame>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -1422,11 +1384,7 @@ namespace Stargazer {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
+        switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -1505,11 +1463,7 @@ namespace Stargazer {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
+        switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -1584,7 +1538,6 @@ namespace Stargazer {
 
   }
 
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class Pose : pb::IMessage<Pose>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -1775,11 +1728,7 @@ namespace Stargazer {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
+        switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -1808,11 +1757,7 @@ namespace Stargazer {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
+        switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -1837,7 +1782,6 @@ namespace Stargazer {
 
   }
 
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class Quaternion : pb::IMessage<Quaternion>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -2080,11 +2024,7 @@ namespace Stargazer {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
+        switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -2115,11 +2055,7 @@ namespace Stargazer {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
+        switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -2146,7 +2082,6 @@ namespace Stargazer {
 
   }
 
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class Vector3 : pb::IMessage<Vector3>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -2360,11 +2295,7 @@ namespace Stargazer {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
+        switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -2391,11 +2322,7 @@ namespace Stargazer {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
+        switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
@@ -2418,7 +2345,6 @@ namespace Stargazer {
 
   }
 
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class DataResponse : pb::IMessage<DataResponse>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
@@ -2632,11 +2558,7 @@ namespace Stargazer {
     #else
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
+        switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
@@ -2663,11 +2585,7 @@ namespace Stargazer {
     void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
       uint tag;
       while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
+        switch(tag) {
           default:
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;

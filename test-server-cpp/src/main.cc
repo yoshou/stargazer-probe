@@ -27,12 +27,14 @@ public:
       // Minimal logging (avoid printing image bytes)
       const std::string& device_id = packet.device_id();
       const int image_bytes = packet.has_camera() ? static_cast<int>(packet.camera().image_data().size()) : 0;
+      const int imu_count = packet.imu_samples_size();
 
       if ((received % 30) == 1) {
         std::cout << "[StreamData] received=" << received
                   << " device_id='" << device_id << "'"
                   << " ts=" << packet.timestamp()
                   << " image_bytes=" << image_bytes
+                  << " imu_samples=" << imu_count
                   ;
 
         if (packet.has_camera()) {

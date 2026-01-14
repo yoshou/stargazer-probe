@@ -50,10 +50,6 @@ namespace StargazerProbe.Grpc
         private Task sendLoopTask;
         private int queuedPackets;
 
-        // Private Fields - Sensor Data
-        private SensorData lastSensor;
-        private bool hasSensor;
-
         // Private Fields - Pause/Resume
         private bool wasStreamingBeforePause;
         private bool resumePending;
@@ -250,7 +246,6 @@ namespace StargazerProbe.Grpc
             finally
             {
                 localCts.Dispose();
-                hasSensor = false;
                 isStopping = false;
 
                 if (resumePending && !isPaused)
@@ -262,25 +257,15 @@ namespace StargazerProbe.Grpc
         }
 
         /// <summary>
-        /// Public method to receive sensor data from external sources
-        /// Called from UIManager when sensor data is updated
+        /// Public method to receive camera frame data with accumulated IMU samples
+        /// Called via callback chain from IMUDataAccumulator
         /// </summary>
-        public void UpdateSensorData(SensorData data)
+        public void SendFrameWithIMU(CameraFrameDataWithIMU frameWithIMU)
         {
-            lastSensor = data;
-            hasSensor = true;
+            OnFrameCaptured(frameWithIMU);
         }
 
-        /// <summary>
-        /// Public method to receive camera frame data from external sources
-        /// Called via callback chain from UIManager
-        /// </summary>
-        public void SendFrameData(CameraFrameData frameData)
-        {
-            OnFrameCaptured(frameData);
-        }
-
-        private void OnFrameCaptured(CameraFrameData frameData)
+        private void OnFrameCaptured(CameraFrameDataWithIMU frameWithIMU)
         {
             framesCaptured++;
 
@@ -297,13 +282,23 @@ namespace StargazerProbe.Grpc
 
             var packet = new Stargazer.DataPacket
             {
-                Timestamp = frameData.Timestamp,
+                Timestamp = frameWithIMU.FrameData.Timestamp,
                 DeviceId = string.IsNullOrWhiteSpace(deviceIdOverride) ? SystemInfo.deviceUniqueIdentifier : deviceIdOverride,
-                Camera = ProtoConverters.ToProto(frameData)
+                Camera = ProtoConverters.ToProto(frameWithIMU.FrameData)
             };
 
-            if (hasSensor)
-                packet.Sensor = ProtoConverters.ToProto(lastSensor);
+            // Attach IMU samples if available
+            if (frameWithIMU.IMUSamples != null && frameWithIMU.IMUSamples.Length > 0)
+            {
+                // Send all accumulated IMU samples
+                foreach (var imuSample in frameWithIMU.IMUSamples)
+                {
+                    packet.ImuSamples.Add(ProtoConverters.ToProto(imuSample));
+                }
+                
+                // Also set the legacy 'sensor' field for backward compatibility
+                packet.Sensor = ProtoConverters.ToProto(frameWithIMU.IMUSamples[frameWithIMU.IMUSamples.Length - 1]);
+            }
 
             int maxBuffer = config != null && config.Advanced != null ? Mathf.Max(1, config.Advanced.MaxBufferSize) : 100;
 
