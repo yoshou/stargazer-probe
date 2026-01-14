@@ -53,6 +53,8 @@ namespace StargazerProbe.Camera
                     
                 case CaptureType.ARFoundation:
                     Debug.Log("[CameraCaptureFactory] Adding ARFoundationCameraCapture");
+                    // Reduce AR feature load
+                    OptimizeARForCaptureOnly();
                     capture = gameObject.AddComponent<ARFoundationCameraCapture>();
                     break;
                     
@@ -80,6 +82,68 @@ namespace StargazerProbe.Camera
             foreach (var bg in backgrounds)
             {
                 bg.enabled = false;
+            }
+        }
+
+        private static void OptimizeARForCaptureOnly()
+        {
+            // Keep tracking; disable non-essential features.
+
+            void DisableAll<T>() where T : Behaviour
+            {
+                var components = Object.FindObjectsByType<T>(FindObjectsSortMode.None);
+                foreach (var component in components)
+                {
+                    if (component != null)
+                        component.enabled = false;
+                }
+
+                if (components.Length > 0)
+                    Debug.Log($"[CameraCaptureFactory] Disabled {components.Length}x {typeof(T).Name}");
+            }
+
+            // Disable non-essential managers
+            DisableAll<UnityEngine.XR.ARFoundation.ARPlaneManager>();
+            DisableAll<UnityEngine.XR.ARFoundation.ARPointCloudManager>();
+            DisableAll<UnityEngine.XR.ARFoundation.ARTrackedImageManager>();
+            DisableAll<UnityEngine.XR.ARFoundation.ARTrackedObjectManager>();
+            DisableAll<UnityEngine.XR.ARFoundation.ARFaceManager>();
+            DisableAll<UnityEngine.XR.ARFoundation.ARHumanBodyManager>();
+            DisableAll<UnityEngine.XR.ARFoundation.ARAnchorManager>();
+            DisableAll<UnityEngine.XR.ARFoundation.ARMeshManager>();
+            DisableAll<UnityEngine.XR.ARFoundation.ARRaycastManager>();
+            DisableAll<UnityEngine.XR.ARFoundation.AREnvironmentProbeManager>();
+            DisableAll<UnityEngine.XR.ARFoundation.ARParticipantManager>();
+            DisableAll<UnityEngine.XR.ARFoundation.ARBoundingBoxManager>();
+
+            // Disable occlusion/depth
+            var occlusionManagers = Object.FindObjectsByType<UnityEngine.XR.ARFoundation.AROcclusionManager>(FindObjectsSortMode.None);
+            foreach (var occlusion in occlusionManagers)
+            {
+                if (occlusion == null)
+                    continue;
+
+                occlusion.requestedEnvironmentDepthMode = UnityEngine.XR.ARSubsystems.EnvironmentDepthMode.Disabled;
+                occlusion.requestedHumanStencilMode = UnityEngine.XR.ARSubsystems.HumanSegmentationStencilMode.Disabled;
+                occlusion.requestedHumanDepthMode = UnityEngine.XR.ARSubsystems.HumanSegmentationDepthMode.Disabled;
+                occlusion.environmentDepthTemporalSmoothingRequested = false;
+                occlusion.enabled = false;
+            }
+
+            if (occlusionManagers.Length > 0)
+                Debug.Log($"[CameraCaptureFactory] Disabled {occlusionManagers.Length}x AROcclusionManager (depth off)");
+
+            // Reduce camera feature load
+            var cameraManager = Object.FindAnyObjectByType<UnityEngine.XR.ARFoundation.ARCameraManager>();
+            if (cameraManager != null)
+            {
+                // Disable light estimation
+                cameraManager.requestedLightEstimation = UnityEngine.XR.ARFoundation.LightEstimation.None;
+                
+                // Disable auto focus
+                cameraManager.autoFocusRequested = false;
+                
+                Debug.Log("[CameraCaptureFactory] Configured ARCameraManager: LightEstimation=None, AutoFocus=False");
             }
         }
         
