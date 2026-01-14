@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
@@ -29,6 +30,11 @@ namespace StargazerProbe.Camera
         [SerializeField] private int targetWidth = 1280;
         [SerializeField] private int targetHeight = 720;
         [SerializeField] private int targetFPS = 30;
+
+        [Header("Performance")]
+        [Tooltip("Number of pixel buffers for encoding. More reduces GC but uses more memory")]
+        [SerializeField] private int pixelBufferCount = 8;
+
         
         // Public Properties - State
         public bool IsCapturing { get; private set; }
@@ -49,6 +55,16 @@ namespace StargazerProbe.Camera
         private Texture2D previewTexture;
         private int previewWidth;
         private int previewHeight;
+
+        // Private Fields - Buffer Pool
+        private int bufferWidth;
+        private int bufferHeight;
+        private readonly object bufferLock = new object();
+        private Queue<Color32[]> availableBuffers;
+
+        // Private Fields - Conversion Buffer
+        private NativeArray<byte> conversionBuffer;
+        private int conversionBufferSize;
         
         // Private Fields - Camera Intrinsics
         private CameraIntrinsics currentIntrinsics;
@@ -184,52 +200,67 @@ namespace StargazerProbe.Camera
                 
                 try
                 {
-                    // Get camera intrinsic parameters (do not reacquire CPU image)
-                    UpdateIntrinsics(image.width, image.height);
-                    
-                    // Convert image data to Color32 array
-                    var conversionParams = new XRCpuImage.ConversionParams
-                    {
-                        inputRect = new RectInt(0, 0, image.width, image.height),
-                        outputDimensions = new Vector2Int(image.width, image.height),
-                        outputFormat = TextureFormat.RGBA32,
-                        transformation = XRCpuImage.Transformation.None
-                    };
-                    
-                    int size = image.GetConvertedDataSize(conversionParams);
-                    var buffer = new NativeArray<byte>(size, Allocator.Temp);
-                    
-                    image.Convert(conversionParams, buffer);
-                    
-                    // Convert to Color32 array
-                    Color32[] pixels = new Color32[image.width * image.height];
+                    int w = image.width;
+                    int h = image.height;
 
-                    var pixelArray = new NativeArray<Color32>(image.width * image.height, Allocator.Temp);
+                    EnsurePixelBuffers(w, h);
+
+                    Color32[] pixels = RentPixelBuffer();
+                    if (pixels == null)
+                    {
+                        SkippedFrames++;
+                        Debug.LogWarning("[ARFoundationCameraCapture] Pixel buffer unavailable. Skipping frame.");
+                        return;
+                    }
+
+                    bool emitted = false;
+
                     try
                     {
-                        var bufferAsColor = buffer.Reinterpret<Color32>(1);
-                        NativeArray<Color32>.Copy(bufferAsColor, pixelArray);
-                        pixelArray.CopyTo(pixels);
+
+                        // Get camera intrinsic parameters (do not reacquire CPU image)
+                        UpdateIntrinsics(w, h);
+                        
+                        // Convert image data to Color32 array
+                        var conversionParams = new XRCpuImage.ConversionParams
+                        {
+                            inputRect = new RectInt(0, 0, w, h),
+                            outputDimensions = new Vector2Int(w, h),
+                            outputFormat = TextureFormat.RGBA32,
+                            transformation = XRCpuImage.Transformation.None
+                        };
+                        
+                        int size = image.GetConvertedDataSize(conversionParams);
+                        EnsureConversionBuffer(size);
+                        
+                        image.Convert(conversionParams, conversionBuffer);
+
+                        var bufferAsColor = conversionBuffer.Reinterpret<Color32>(1);
+                        NativeArray<Color32>.Copy(bufferAsColor, pixels);
+
+                        // Update UI preview texture (main thread)
+                        UpdatePreviewTexture(w, h, pixels);
+                        
+                        // Emit raw data via event
+                        OnFrameCaptured?.Invoke(new RawCameraFrameData
+                        {
+                            Timestamp = Time.realtimeSinceStartup,
+                            Width = w,
+                            Height = h,
+                            Pixels = pixels,
+                            Intrinsics = hasIntrinsics ? currentIntrinsics : default,
+                            ReturnBufferCallback = ReturnPixelBuffer
+                        });
+
+                        emitted = true;
                     }
                     finally
                     {
-                        pixelArray.Dispose();
-                        buffer.Dispose();
+                        if (!emitted)
+                        {
+                            ReturnPixelBuffer(pixels);
+                        }
                     }
-
-                    // Update UI preview texture (main thread)
-                    UpdatePreviewTexture(image.width, image.height, pixels);
-                    
-                    // Emit raw data via event
-                    OnFrameCaptured?.Invoke(new RawCameraFrameData
-                    {
-                        Timestamp = Time.realtimeSinceStartup,
-                        Width = image.width,
-                        Height = image.height,
-                        Pixels = pixels,
-                        Intrinsics = hasIntrinsics ? currentIntrinsics : default,
-                        ReturnBufferCallback = null  // ARFoundation has no buffer pooling
-                    });
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -301,6 +332,9 @@ namespace StargazerProbe.Camera
                 arCameraManager.frameReceived -= OnCameraFrameReceived;
             }
 
+            DisposeConversionBuffer();
+            availableBuffers = null;
+
             Debug.Log("AR Camera stopped");
             OnCaptureStopped?.Invoke();
         }
@@ -347,6 +381,76 @@ namespace StargazerProbe.Camera
 
             previewTexture.SetPixels32(pixels);
             previewTexture.Apply(false);
+        }
+
+        private void EnsurePixelBuffers(int w, int h)
+        {
+            if (availableBuffers == null || w != bufferWidth || h != bufferHeight)
+            {
+                RebuildPixelBuffers(w, h);
+            }
+        }
+
+        private void RebuildPixelBuffers(int w, int h)
+        {
+            bufferWidth = w;
+            bufferHeight = h;
+
+            int buffers = Mathf.Max(2, pixelBufferCount);
+            availableBuffers = new Queue<Color32[]>(buffers);
+            for (int i = 0; i < buffers; i++)
+            {
+                availableBuffers.Enqueue(new Color32[w * h]);
+            }
+
+        }
+
+        private Color32[] RentPixelBuffer()
+        {
+            if (availableBuffers == null)
+                return null;
+
+            lock (bufferLock)
+            {
+                if (availableBuffers.Count == 0)
+                    return null;
+                return availableBuffers.Dequeue();
+            }
+        }
+
+        private void ReturnPixelBuffer(Color32[] buffer)
+        {
+            if (buffer == null || availableBuffers == null)
+                return;
+
+            int expected = bufferWidth > 0 && bufferHeight > 0 ? bufferWidth * bufferHeight : buffer.Length;
+            if (buffer.Length != expected)
+                return;
+
+            lock (bufferLock)
+            {
+                availableBuffers.Enqueue(buffer);
+            }
+        }
+
+        private void EnsureConversionBuffer(int size)
+        {
+            if (!conversionBuffer.IsCreated || conversionBufferSize < size)
+            {
+                DisposeConversionBuffer();
+                conversionBuffer = new NativeArray<byte>(size, Allocator.Persistent);
+                conversionBufferSize = size;
+            }
+        }
+
+        private void DisposeConversionBuffer()
+        {
+            if (conversionBuffer.IsCreated)
+            {
+                conversionBuffer.Dispose();
+            }
+
+            conversionBufferSize = 0;
         }
 
         private void OnDestroy()
