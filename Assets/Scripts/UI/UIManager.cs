@@ -321,16 +321,35 @@ namespace StargazerProbe.UI
                 rt.pivot = new Vector2(0.5f, 0.5f);
                 rt.anchoredPosition = Vector2.zero;
 
-                // Adjust rotation and mirroring based on screen orientation
-                int angle = 0;
-                Vector3 scale = new Vector3(-1f, 1f, 1f); // X-axis flip for mirroring correction
-
-                if (Screen.orientation == ScreenOrientation.Portrait || Screen.orientation == ScreenOrientation.PortraitUpsideDown)
+                // ARFoundation preview is built from CPU image pixels (no built-in display matrix).
+                // Apply UI rotation/mirroring based on current screen orientation.
+                float zRotationDeg;
+                Vector3 scale;
+                switch (Screen.orientation)
                 {
-                    angle = -90; // Rotate 90 degrees for portrait
+                    case ScreenOrientation.Portrait:
+                        zRotationDeg = 90f;
+                        scale = new Vector3(-1f, 1f, 1f);
+                        break;
+                    case ScreenOrientation.PortraitUpsideDown:
+                        zRotationDeg = -90f;
+                        scale = new Vector3(-1f, 1f, 1f);
+                        break;
+                    case ScreenOrientation.LandscapeLeft:
+                        zRotationDeg = 180f;
+                        scale = new Vector3(-1f, 1f, 1f);
+                        break;
+                    case ScreenOrientation.LandscapeRight:
+                        zRotationDeg = 0f;
+                        scale = new Vector3(-1f, 1f, 1f);
+                        break;
+                    default:
+                        zRotationDeg = 0f;
+                        scale = new Vector3(-1f, 1f, 1f);
+                        break;
                 }
 
-                rt.localEulerAngles = new Vector3(0, 0, -angle);
+                rt.localEulerAngles = new Vector3(0f, 0f, zRotationDeg);
                 rt.localScale = scale;
 
                 RectTransform parentRect = cameraPreviewImage.transform.parent as RectTransform;
@@ -344,7 +363,7 @@ namespace StargazerProbe.UI
 
                 // Size after rotation
                 float visualWidth, visualHeight;
-                if (Mathf.Abs(angle) == 90 || Mathf.Abs(angle) == 270)
+                if (Mathf.Abs(zRotationDeg) == 90f || Mathf.Abs(zRotationDeg) == 270f)
                 {
                     visualWidth = texHeight;
                     visualHeight = texWidth;
