@@ -50,9 +50,9 @@ namespace StargazerProbe.Editor
             {
                 Object.DestroyImmediate(comp.gameObject);
             }
-            
-            ARFoundationCameraCapture[] arCaptures = Object.FindObjectsByType<ARFoundationCameraCapture>(FindObjectsSortMode.None);
-            foreach (var comp in arCaptures)
+
+            Camera2CameraCapture[] camera2Captures = Object.FindObjectsByType<Camera2CameraCapture>(FindObjectsSortMode.None);
+            foreach (var comp in camera2Captures)
             {
                 Object.DestroyImmediate(comp.gameObject);
             }
@@ -74,9 +74,6 @@ namespace StargazerProbe.Editor
             // Setup Main Camera (Black Background)
             SetupMainCamera();
             
-            // Setup AR Foundation (if using ARFoundation)
-            SetupARFoundation();
-            
             // 1. Managers
             GameObject sensorManager = CreateSensorManager();
             GameObject cameraCapture = CreateCameraCapture();
@@ -96,9 +93,9 @@ namespace StargazerProbe.Editor
             SettingsPanel settingsPanelComp = settingsPanel.GetComponent<SettingsPanel>();
             SerializedObject spSo = new SerializedObject(settingsPanelComp);
             spSo.FindProperty("sensorManager").objectReferenceValue = sensorManager.GetComponent<IMUSensorManager>();
-            // Get ICameraCapture (MobileCameraCapture or ARFoundationCameraCapture)
-            Component cameraCaptureComp = cameraCapture.GetComponent<MobileCameraCapture>() as Component 
-                ?? cameraCapture.GetComponent<ARFoundationCameraCapture>() as Component;
+            // Get ICameraCapture (MobileCameraCapture or Camera2CameraCapture)
+            Component cameraCaptureComp = cameraCapture.GetComponent<MobileCameraCapture>() as Component
+                ?? cameraCapture.GetComponent<Camera2CameraCapture>() as Component;
             spSo.FindProperty("cameraCapture").objectReferenceValue = cameraCaptureComp;
             spSo.ApplyModifiedProperties();
             
@@ -176,64 +173,6 @@ namespace StargazerProbe.Editor
             mainCam.transform.rotation = Quaternion.identity;
             
             Debug.Log("Main Camera configured with black background");
-        }
-
-        private static void SetupARFoundation()
-        {
-            // Check CameraCaptureFactory settings
-            var captureType = CameraCaptureFactory.GetActiveCaptureType();
-            
-            if (captureType != CameraCaptureFactory.CaptureType.ARFoundation)
-            {
-                Debug.Log("AR Foundation not active, skipping AR setup");
-                return;
-            }
-            
-            Debug.Log("Setting up AR Foundation...");
-            
-            // Create AR Session
-            GameObject arSession = GameObject.Find("AR Session");
-            if (arSession == null)
-            {
-                arSession = new GameObject("AR Session");
-                var arSessionComponent = arSession.AddComponent<UnityEngine.XR.ARFoundation.ARSession>();
-                Debug.Log("AR Session created");
-            }
-            
-            // Create XR Origin
-            GameObject xrOrigin = GameObject.Find("XR Origin");
-            if (xrOrigin == null)
-            {
-                xrOrigin = new GameObject("XR Origin");
-                var xrOriginComponent = xrOrigin.AddComponent<Unity.XR.CoreUtils.XROrigin>();
-                
-                // Create AR Camera
-                GameObject arCamera = new GameObject("AR Camera");
-                arCamera.transform.SetParent(xrOrigin.transform, false);
-                arCamera.tag = "MainCamera";
-                
-                var camera = arCamera.AddComponent<UnityEngine.Camera>();
-                camera.clearFlags = CameraClearFlags.SolidColor;
-                camera.backgroundColor = Color.black;
-                camera.nearClipPlane = 0.1f;
-                camera.farClipPlane = 20f;
-                
-                arCamera.AddComponent<UnityEngine.XR.ARFoundation.ARCameraManager>();
-                arCamera.AddComponent<UnityEngine.XR.ARFoundation.ARCameraBackground>();
-                
-                xrOriginComponent.Camera = camera;
-                
-                // Delete Main Camera
-                var mainCam = UnityEngine.Camera.main;
-                if (mainCam != null && mainCam.gameObject != arCamera)
-                {
-                    Object.DestroyImmediate(mainCam.gameObject);
-                }
-                
-                Debug.Log("XR Origin with AR Camera created");
-            }
-            
-            Debug.Log("AR Foundation setup completed");
         }
 
         private static GameObject CreateSensorManager()

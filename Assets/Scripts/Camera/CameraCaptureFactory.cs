@@ -13,12 +13,16 @@ namespace StargazerProbe.Camera
         public enum CaptureType
         {
             Mobile,         // MobileCameraCapture (WebCamTexture)
-            ARFoundation    // ARFoundationCameraCapture
+            Camera2         // Camera2CameraCapture (Android Camera2)
         }
         
         // Hard-coded setting to switch implementation
         // Change this and rebuild to switch implementation
-        private const CaptureType ACTIVE_CAPTURE_TYPE = CaptureType.ARFoundation;
+    #if UNITY_ANDROID && !UNITY_EDITOR
+        private const CaptureType ACTIVE_CAPTURE_TYPE = CaptureType.Camera2;
+    #else
+        private const CaptureType ACTIVE_CAPTURE_TYPE = CaptureType.Mobile;
+    #endif
         
         /// <summary>
         /// Add appropriate camera capture component to specified GameObject
@@ -46,16 +50,12 @@ namespace StargazerProbe.Camera
             {
                 case CaptureType.Mobile:
                     Debug.Log("[CameraCaptureFactory] Adding MobileCameraCapture");
-                    // Stop/disable AR features when using WebCamTexture
-                    DisableARComponents();
                     capture = gameObject.AddComponent<MobileCameraCapture>();
                     break;
-                    
-                case CaptureType.ARFoundation:
-                    Debug.Log("[CameraCaptureFactory] Adding ARFoundationCameraCapture");
-                    // Reduce AR feature load
-                    OptimizeARForCaptureOnly();
-                    capture = gameObject.AddComponent<ARFoundationCameraCapture>();
+
+                case CaptureType.Camera2:
+                    Debug.Log("[CameraCaptureFactory] Adding Camera2CameraCapture");
+                    capture = gameObject.AddComponent<Camera2CameraCapture>();
                     break;
                     
                 default:
@@ -65,86 +65,6 @@ namespace StargazerProbe.Camera
 #pragma warning restore CS0162
             
             return capture;
-        }
-
-        private static void DisableARComponents()
-        {
-            // Disable AR features to avoid conflicts with Mobile(WebCamTexture) mode
-            var arSession = Object.FindAnyObjectByType<UnityEngine.XR.ARFoundation.ARSession>();
-            if (arSession != null)
-            {
-                arSession.enabled = false;
-                Debug.Log("[CameraCaptureFactory] Disabled ARSession (Mobile mode)");
-            }
-
-            // Disable ARCameraBackground (prevent camera feed from appearing in background)
-            var backgrounds = Object.FindObjectsByType<UnityEngine.XR.ARFoundation.ARCameraBackground>(FindObjectsSortMode.None);
-            foreach (var bg in backgrounds)
-            {
-                bg.enabled = false;
-            }
-        }
-
-        private static void OptimizeARForCaptureOnly()
-        {
-            // Keep tracking; disable non-essential features.
-
-            void DisableAll<T>() where T : Behaviour
-            {
-                var components = Object.FindObjectsByType<T>(FindObjectsSortMode.None);
-                foreach (var component in components)
-                {
-                    if (component != null)
-                        component.enabled = false;
-                }
-
-                if (components.Length > 0)
-                    Debug.Log($"[CameraCaptureFactory] Disabled {components.Length}x {typeof(T).Name}");
-            }
-
-            // Disable non-essential managers
-            DisableAll<UnityEngine.XR.ARFoundation.ARPlaneManager>();
-            DisableAll<UnityEngine.XR.ARFoundation.ARPointCloudManager>();
-            DisableAll<UnityEngine.XR.ARFoundation.ARTrackedImageManager>();
-            DisableAll<UnityEngine.XR.ARFoundation.ARTrackedObjectManager>();
-            DisableAll<UnityEngine.XR.ARFoundation.ARFaceManager>();
-            DisableAll<UnityEngine.XR.ARFoundation.ARHumanBodyManager>();
-            DisableAll<UnityEngine.XR.ARFoundation.ARAnchorManager>();
-            DisableAll<UnityEngine.XR.ARFoundation.ARMeshManager>();
-            DisableAll<UnityEngine.XR.ARFoundation.ARRaycastManager>();
-            DisableAll<UnityEngine.XR.ARFoundation.AREnvironmentProbeManager>();
-            DisableAll<UnityEngine.XR.ARFoundation.ARParticipantManager>();
-            DisableAll<UnityEngine.XR.ARFoundation.ARBoundingBoxManager>();
-
-            // Disable occlusion/depth
-            var occlusionManagers = Object.FindObjectsByType<UnityEngine.XR.ARFoundation.AROcclusionManager>(FindObjectsSortMode.None);
-            foreach (var occlusion in occlusionManagers)
-            {
-                if (occlusion == null)
-                    continue;
-
-                occlusion.requestedEnvironmentDepthMode = UnityEngine.XR.ARSubsystems.EnvironmentDepthMode.Disabled;
-                occlusion.requestedHumanStencilMode = UnityEngine.XR.ARSubsystems.HumanSegmentationStencilMode.Disabled;
-                occlusion.requestedHumanDepthMode = UnityEngine.XR.ARSubsystems.HumanSegmentationDepthMode.Disabled;
-                occlusion.environmentDepthTemporalSmoothingRequested = false;
-                occlusion.enabled = false;
-            }
-
-            if (occlusionManagers.Length > 0)
-                Debug.Log($"[CameraCaptureFactory] Disabled {occlusionManagers.Length}x AROcclusionManager (depth off)");
-
-            // Reduce camera feature load
-            var cameraManager = Object.FindAnyObjectByType<UnityEngine.XR.ARFoundation.ARCameraManager>();
-            if (cameraManager != null)
-            {
-                // Disable light estimation
-                cameraManager.requestedLightEstimation = UnityEngine.XR.ARFoundation.LightEstimation.None;
-                
-                // Disable auto focus
-                cameraManager.autoFocusRequested = false;
-                
-                Debug.Log("[CameraCaptureFactory] Configured ARCameraManager: LightEstimation=None, AutoFocus=False");
-            }
         }
         
         /// <summary>
@@ -158,10 +78,10 @@ namespace StargazerProbe.Camera
                 Object.Destroy(mobileCapture);
             }
             
-            var arCapture = gameObject.GetComponent<ARFoundationCameraCapture>();
-            if (arCapture != null)
+            var camera2Capture = gameObject.GetComponent<Camera2CameraCapture>();
+            if (camera2Capture != null)
             {
-                Object.Destroy(arCapture);
+                Object.Destroy(camera2Capture);
             }
         }
         

@@ -899,7 +899,7 @@ namespace Stargazer {
     public const int FocalLengthXFieldNumber = 7;
     private float focalLengthX_;
     /// <summary>
-    /// Camera intrinsics (e.g., from ARFoundation)
+    /// Camera intrinsics (fx, fy, cx, cy).
     /// Values should correspond to the same resolution as image_data.
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -985,8 +985,7 @@ namespace Stargazer {
     private float distortionK1_;
     /// <summary>
     /// Distortion coefficients (Brown–Conrady).
-    /// Note: ARFoundation CPU images are typically already undistorted on ARCore,
-    /// so we send zeros.
+    /// If distortion is not available, send zeros.
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]

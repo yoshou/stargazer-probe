@@ -5,7 +5,7 @@ namespace StargazerProbe.Camera
 {
     /// <summary>
     /// Common interface for camera capture
-    /// Used by both MobileCameraCapture and ARFoundationCameraCapture
+    /// Implemented by MobileCameraCapture and Camera2CameraCapture
     /// </summary>
     public interface ICameraCapture
     {

@@ -4282,9 +4282,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3859a92a05d4f5d418cb6ca605290e74, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_AttemptUpdate: 1
-  m_MatchFrameRate: 1
-  m_TrackingMode: 2
 --- !u!4 &1022730102
 Transform:
   m_ObjectHideFlags: 0
@@ -5192,11 +5189,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 520bb47c46cf8624fafb307b7d1b862a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Camera: {fileID: 1565303722}
-  m_OriginBaseGameObject: {fileID: 1140524418}
-  m_CameraFloorOffsetObject: {fileID: 0}
-  m_RequestedTrackingOriginMode: 0
-  m_CameraYOffset: 1.1176
 --- !u!4 &1140524420
 Transform:
   m_ObjectHideFlags: 0
@@ -7316,8 +7308,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 816b289ef451e094f9ae174fb4cf8db0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_UseCustomMaterial: 0
-  m_CustomMaterial: {fileID: 0}
 --- !u!114 &1565303724
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7330,13 +7320,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4966719baa26e4b0e8231a24d9bd491a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_FocusMode: -1
-  m_LightEstimationMode: -1
-  m_AutoFocus: 1
-  m_ImageStabilization: 0
-  m_LightEstimation: 0
-  m_FacingDirection: 1
-  m_RenderMode: 0
 --- !u!4 &1565303725
 Transform:
   m_ObjectHideFlags: 0
@@ -7945,11 +7928,7 @@ MonoBehaviour:
   width: 1280
   height: 720
   targetFPS: 30
-  jpegQuality: 75
-  autoAdjustQuality: 1
-  maxSkipFrames: 3
-  maxPendingEncodes: 2
-  encoderBufferCount: 3
+  pixelBufferCount: 8
 --- !u!4 &1692448541
 Transform:
   m_ObjectHideFlags: 0
@@ -9212,6 +9191,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sensorManager: {fileID: 681902207}
   grpcDataStreamer: {fileID: 0}
+  jpegQuality: 75
   cameraPreviewImage: {fileID: 1063328737}
   connectionStatusText: {fileID: 1307054021}
   fpsCounterText: {fileID: 1574226628}

@@ -28,7 +28,7 @@ message CameraFrame {
   int32 quality = 4;
   double camera_timestamp = 5;
 
-  // Camera intrinsics (e.g., from ARFoundation)
+  // Camera intrinsics (fx, fy, cx, cy)
   // Values should correspond to the same resolution as image_data.
   float focal_length_x = 7;      // fx
   float focal_length_y = 8;      // fy
@@ -38,8 +38,7 @@ message CameraFrame {
   int32 intrinsics_image_height = 12;
 
   // Distortion coefficients (Brown–Conrady).
-  // Note: ARFoundation CPU images are typically already undistorted on ARCore,
-  // so we send zeros.
+  // If distortion is not available, send zeros.
   float distortion_k1 = 13;
   float distortion_k2 = 14;
   float distortion_p1 = 15;

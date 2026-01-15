@@ -311,7 +311,7 @@ namespace StargazerProbe.UI
             }
             else
             {
-                // ARFoundation: Adjust rotation and aspect ratio on UI side
+                // Non-WebCamTexture preview (e.g., decoded Texture2D from Android Camera2)
                 var fitter = cameraPreviewImage.GetComponent<AspectRatioFitter>();
                 if (fitter != null) Destroy(fitter);
 
@@ -321,32 +321,13 @@ namespace StargazerProbe.UI
                 rt.pivot = new Vector2(0.5f, 0.5f);
                 rt.anchoredPosition = Vector2.zero;
 
-                // ARFoundation preview is built from CPU image pixels (no built-in display matrix).
-                // Apply UI rotation/mirroring based on current screen orientation.
-                float zRotationDeg;
-                Vector3 scale;
-                switch (Screen.orientation)
+                float zRotationDeg = 0f;
+                Vector3 scale = Vector3.one;
+                if (cameraCapture is Camera2CameraCapture camera2)
                 {
-                    case ScreenOrientation.Portrait:
-                        zRotationDeg = 90f;
-                        scale = new Vector3(-1f, 1f, 1f);
-                        break;
-                    case ScreenOrientation.PortraitUpsideDown:
-                        zRotationDeg = -90f;
-                        scale = new Vector3(-1f, 1f, 1f);
-                        break;
-                    case ScreenOrientation.LandscapeLeft:
-                        zRotationDeg = 180f;
-                        scale = new Vector3(-1f, 1f, 1f);
-                        break;
-                    case ScreenOrientation.LandscapeRight:
-                        zRotationDeg = 0f;
-                        scale = new Vector3(-1f, 1f, 1f);
-                        break;
-                    default:
-                        zRotationDeg = 0f;
-                        scale = new Vector3(-1f, 1f, 1f);
-                        break;
+                    // Keep the same convention as WebCamTexture branch (Unity UI rotates by -angle)
+                    zRotationDeg = -camera2.RotationDegrees;
+                    scale = camera2.IsMirrored ? new Vector3(-1f, 1f, 1f) : Vector3.one;
                 }
 
                 rt.localEulerAngles = new Vector3(0f, 0f, zRotationDeg);
@@ -361,7 +342,6 @@ namespace StargazerProbe.UI
                 float texWidth = previewTexture.width;
                 float texHeight = previewTexture.height;
 
-                // Size after rotation
                 float visualWidth, visualHeight;
                 if (Mathf.Abs(zRotationDeg) == 90f || Mathf.Abs(zRotationDeg) == 270f)
                 {
