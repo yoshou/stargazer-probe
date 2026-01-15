@@ -23,6 +23,8 @@ import android.util.SizeF;
 import android.view.Surface;
 import android.view.WindowManager;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -34,9 +36,32 @@ import java.util.List;
 public final class Camera2Capture {
     private static final String TAG = "Camera2Capture";
 
+    // Image processing guard: keep only one conversion active to avoid callback backlog.
+    private final AtomicBoolean isProcessingImage = new AtomicBoolean(false);
+
     private final Object frameLock = new Object();
     private byte[] latestJpeg;
     private long latestTimestampNs;
+
+    // Reused buffers to reduce per-frame allocations (critical for sustained 30fps).
+    private byte[] nv21Buffer;
+    private Rect jpegRect;
+    private ByteArrayOutputStream jpegStream;
+
+    // Diagnostics
+    private Range<Integer> activeFpsRange;
+    private long fpsWindowStartNs;
+    private int fpsWindowFrames;
+
+    // JPEG quality (1-100). Lower is faster/smaller.
+    private int jpegQuality = 75;
+    private int requestedJpegQuality = 75;
+    private int targetFpsRequested = 30;
+    private boolean adaptiveJpegQuality = true;
+    private int minJpegQuality = 35;
+
+    // Processing-time diagnostics (windowed)
+    private long fpsWindowProcNs;
 
     private boolean isFrontFacing;
     private int sensorOrientation;
@@ -53,17 +78,25 @@ public final class Camera2Capture {
     private ImageReader imageReader;
 
     public boolean start(Activity activity, int targetWidth, int targetHeight, int targetFps, boolean useFront) {
+        return start(activity, targetWidth, targetHeight, targetFps, useFront, 75);
+    }
+
+    public boolean start(Activity activity, int targetWidth, int targetHeight, int targetFps, boolean useFront, int jpegQuality) {
         stop();
 
         if (activity == null) {
             return false;
         }
 
+        this.requestedJpegQuality = Math.max(1, Math.min(100, jpegQuality));
+        this.jpegQuality = this.requestedJpegQuality;
+        this.targetFpsRequested = Math.max(1, targetFps);
+
         try {
             startBackgroundThread();
 
             CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
-            CameraSelection selection = chooseCamera(manager, useFront, targetWidth, targetHeight);
+            CameraSelection selection = chooseCamera(manager, useFront, targetWidth, targetHeight, targetFps);
             if (selection == null) {
                 Log.e(TAG, "No suitable camera found");
                 stop();
@@ -77,7 +110,20 @@ public final class Camera2Capture {
             Integer so = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
             sensorOrientation = so != null ? so : 0;
 
-            imageReader = ImageReader.newInstance(selectedSize.getWidth(), selectedSize.getHeight(), ImageFormat.YUV_420_888, 2);
+            // Reset diagnostics and reusable buffers
+            activeFpsRange = null;
+            fpsWindowStartNs = 0L;
+            fpsWindowFrames = 0;
+            fpsWindowProcNs = 0L;
+
+            int w = selectedSize.getWidth();
+            int h = selectedSize.getHeight();
+            nv21Buffer = new byte[w * h * 3 / 2];
+            jpegRect = new Rect(0, 0, w, h);
+            jpegStream = new ByteArrayOutputStream(Math.max(1024, w * h / 2));
+
+            // Keep a slightly deeper queue to reduce stalls if conversion is momentarily slow.
+            imageReader = ImageReader.newInstance(w, h, ImageFormat.YUV_420_888, 4);
             imageReader.setOnImageAvailableListener(reader -> onImageAvailable(reader), backgroundHandler);
 
             manager.openCamera(cameraId, new CameraDevice.StateCallback() {
@@ -119,6 +165,11 @@ public final class Camera2Capture {
             latestTimestampNs = 0L;
         }
 
+        isProcessingImage.set(false);
+        activeFpsRange = null;
+        fpsWindowStartNs = 0L;
+        fpsWindowFrames = 0;
+
         try {
             if (captureSession != null) {
                 try { captureSession.stopRepeating(); } catch (Exception ignored) {}
@@ -151,6 +202,10 @@ public final class Camera2Capture {
         characteristics = null;
         isFrontFacing = false;
         sensorOrientation = 0;
+
+        nv21Buffer = null;
+        jpegRect = null;
+        jpegStream = null;
     }
 
     public byte[] consumeLatestJpeg() {
@@ -159,6 +214,26 @@ public final class Camera2Capture {
             latestJpeg = null;
             return out;
         }
+    }
+
+    public int getWidth() {
+        return selectedSize != null ? selectedSize.getWidth() : 0;
+    }
+
+    public int getHeight() {
+        return selectedSize != null ? selectedSize.getHeight() : 0;
+    }
+
+    public int getJpegQuality() {
+        return jpegQuality;
+    }
+
+    public int getRequestedJpegQuality() {
+        return requestedJpegQuality;
+    }
+
+    public boolean getAdaptiveJpegQualityEnabled() {
+        return adaptiveJpegQuality;
     }
 
     public long getLatestTimestampNs() {
@@ -211,7 +286,6 @@ public final class Camera2Capture {
 
             float scaleX = (float) selectedSize.getWidth() / (float) activeArray.width();
             float scaleY = (float) selectedSize.getHeight() / (float) activeArray.height();
-
             float fx = fxSensor * scaleX;
             float fy = fySensor * scaleY;
 
@@ -241,11 +315,20 @@ public final class Camera2Capture {
                     try {
                         CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
                         builder.addTarget(imageReader.getSurface());
+
+                        // Prefer performance-oriented defaults for realtime capture.
+                        builder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
+                        builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
                         builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
+                        builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
+                        builder.set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_FAST);
+                        builder.set(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_FAST);
+                        builder.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF);
 
                         Range<Integer> fpsRange = chooseFpsRange(characteristics, targetFps);
                         if (fpsRange != null) {
                             builder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fpsRange);
+                            activeFpsRange = fpsRange;
                         }
 
                         session.setRepeatingRequest(builder.build(), null, backgroundHandler);
@@ -272,7 +355,14 @@ public final class Camera2Capture {
                 return;
             }
 
-            byte[] jpeg = yuv420ToJpeg(image, 85);
+            // If a previous frame is still being converted, drop this one quickly.
+            if (!isProcessingImage.compareAndSet(false, true)) {
+                return;
+            }
+
+            long procStartNs = System.nanoTime();
+            byte[] jpeg = yuv420ToJpeg(image, this.jpegQuality);
+            long procEndNs = System.nanoTime();
             if (jpeg == null || jpeg.length == 0) {
                 return;
             }
@@ -281,34 +371,87 @@ public final class Camera2Capture {
                 latestJpeg = jpeg;
                 latestTimestampNs = image.getTimestamp();
             }
+
+            // Periodic incoming-frame FPS diagnostics (based on camera timestamps).
+            long ts = image.getTimestamp();
+            if (ts > 0) {
+                if (fpsWindowStartNs == 0L) {
+                    fpsWindowStartNs = ts;
+                    fpsWindowFrames = 0;
+                    fpsWindowProcNs = 0L;
+                }
+                fpsWindowFrames++;
+                fpsWindowProcNs += Math.max(0L, procEndNs - procStartNs);
+                long dt = ts - fpsWindowStartNs;
+                if (dt >= 1_000_000_000L) {
+                    double fps = (fpsWindowFrames * 1_000_000_000.0) / (double) dt;
+                    double avgProcMs = fpsWindowFrames > 0 ? (fpsWindowProcNs / 1_000_000.0) / (double) fpsWindowFrames : 0.0;
+
+                    // Adaptive quality: if we cannot keep up, lower JPEG quality to prioritize FPS.
+                    // This does not require restarting the capture session.
+                    if (adaptiveJpegQuality) {
+                        if (fps < (double) targetFpsRequested - 0.5 && jpegQuality > minJpegQuality) {
+                            jpegQuality = Math.max(minJpegQuality, jpegQuality - 5);
+                        } else if (fps > (double) targetFpsRequested + 1.5 && jpegQuality < requestedJpegQuality) {
+                            jpegQuality = Math.min(requestedJpegQuality, jpegQuality + 1);
+                        }
+                    }
+
+                    Log.i(TAG, "Camera2 incomingFPS=" + String.format("%.1f", fps)
+                            + " size=" + (selectedSize != null ? (selectedSize.getWidth() + "x" + selectedSize.getHeight()) : "?")
+                            + " aeFpsRange=" + (activeFpsRange != null ? activeFpsRange.toString() : "null")
+                            + " jpegQ=" + this.jpegQuality
+                            + " jpegQMax=" + this.requestedJpegQuality
+                            + " avgProcMs=" + String.format("%.2f", avgProcMs));
+                    fpsWindowStartNs = ts;
+                    fpsWindowFrames = 0;
+                    fpsWindowProcNs = 0L;
+                }
+            }
         } catch (Exception e) {
             Log.e(TAG, "onImageAvailable failed", e);
         } finally {
             if (image != null) {
                 try { image.close(); } catch (Exception ignored) {}
             }
+
+            isProcessingImage.set(false);
         }
     }
 
-    private static byte[] yuv420ToJpeg(Image image, int jpegQuality) {
+    private byte[] yuv420ToJpeg(Image image, int jpegQuality) {
+        if (image == null) {
+            return null;
+        }
+
         int width = image.getWidth();
         int height = image.getHeight();
 
-        byte[] nv21 = yuv420ToNv21(image);
-        if (nv21 == null) {
+        int required = width * height * 3 / 2;
+        if (nv21Buffer == null || nv21Buffer.length < required) {
+            nv21Buffer = new byte[required];
+        }
+        if (jpegRect == null || jpegRect.width() != width || jpegRect.height() != height) {
+            jpegRect = new Rect(0, 0, width, height);
+        }
+        if (jpegStream == null) {
+            jpegStream = new ByteArrayOutputStream(Math.max(1024, width * height / 2));
+        }
+
+        if (!yuv420ToNv21(image, nv21Buffer)) {
             return null;
         }
 
-        YuvImage yuvImage = new YuvImage(nv21, ImageFormat.NV21, width, height, null);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        boolean ok = yuvImage.compressToJpeg(new Rect(0, 0, width, height), jpegQuality, out);
-        return ok ? out.toByteArray() : null;
+        jpegStream.reset();
+        YuvImage yuvImage = new YuvImage(nv21Buffer, ImageFormat.NV21, width, height, null);
+        boolean ok = yuvImage.compressToJpeg(jpegRect, jpegQuality, jpegStream);
+        return ok ? jpegStream.toByteArray() : null;
     }
 
-    private static byte[] yuv420ToNv21(Image image) {
+    private static boolean yuv420ToNv21(Image image, byte[] out) {
         Image.Plane[] planes = image.getPlanes();
         if (planes == null || planes.length < 3) {
-            return null;
+            return false;
         }
 
         int width = image.getWidth();
@@ -316,7 +459,9 @@ public final class Camera2Capture {
 
         int ySize = width * height;
         int uvSize = width * height / 2;
-        byte[] out = new byte[ySize + uvSize];
+        if (out == null || out.length < (ySize + uvSize)) {
+            return false;
+        }
 
         ByteBuffer yBuffer = planes[0].getBuffer();
         ByteBuffer uBuffer = planes[1].getBuffer();
@@ -363,7 +508,7 @@ public final class Camera2Capture {
             }
         }
 
-        return out;
+        return true;
     }
 
     private static int getDeviceRotationDegrees(Activity activity) {
@@ -410,12 +555,15 @@ public final class Camera2Capture {
                 int lower = r.getLower();
                 int upper = r.getUpper();
 
-                // Prefer ranges that include targetFps, otherwise closest upper bound.
+                // Prefer fixed/near-fixed ranges at targetFps (e.g., 30-30).
+                // Wide ranges like 15-30 often allow the camera to drop frames in low light.
                 int score;
                 if (lower <= targetFps && targetFps <= upper) {
-                    score = (upper - targetFps) + (targetFps - lower);
+                    int lowerPenalty = (targetFps - lower) * 10;
+                    int upperPenalty = (upper - targetFps);
+                    score = lowerPenalty + upperPenalty;
                 } else {
-                    score = Math.min(Math.abs(upper - targetFps), Math.abs(lower - targetFps)) + 1000;
+                    score = Math.min(Math.abs(upper - targetFps), Math.abs(lower - targetFps)) + 10_000;
                 }
 
                 if (score < bestScore) {
@@ -430,7 +578,7 @@ public final class Camera2Capture {
         }
     }
 
-    private static CameraSelection chooseCamera(CameraManager manager, boolean useFront, int targetWidth, int targetHeight) throws CameraAccessException {
+    private static CameraSelection chooseCamera(CameraManager manager, boolean useFront, int targetWidth, int targetHeight, int targetFps) throws CameraAccessException {
         if (manager == null) {
             return null;
         }
@@ -463,7 +611,7 @@ public final class Camera2Capture {
                 continue;
             }
 
-            Size bestSize = chooseBestSize(sizes, targetWidth, targetHeight);
+            Size bestSize = chooseBestSize(map, sizes, targetWidth, targetHeight, targetFps);
             if (bestSize == null) {
                 continue;
             }
@@ -486,7 +634,7 @@ public final class Camera2Capture {
             Size[] sizes = map.getOutputSizes(ImageFormat.YUV_420_888);
             if (sizes == null || sizes.length == 0) continue;
 
-            Size bestSize = chooseBestSize(sizes, targetWidth, targetHeight);
+            Size bestSize = chooseBestSize(map, sizes, targetWidth, targetHeight, targetFps);
             if (bestSize == null) continue;
 
             Integer facing = cc.get(CameraCharacteristics.LENS_FACING);
@@ -498,10 +646,14 @@ public final class Camera2Capture {
         return null;
     }
 
-    private static Size chooseBestSize(Size[] sizes, int targetWidth, int targetHeight) {
+    private static Size chooseBestSize(StreamConfigurationMap map, Size[] sizes, int targetWidth, int targetHeight, int targetFps) {
         if (sizes == null || sizes.length == 0) {
             return null;
         }
+
+        // Prefer sizes that can actually reach targetFps (based on min frame duration).
+        // If the camera doesn't report durations, we keep all sizes.
+        final long targetFrameNs = targetFps > 0 ? (1_000_000_000L / (long) targetFps) : 0L;
 
         final float targetAspect = targetHeight > 0 ? (float) targetWidth / (float) targetHeight : 0f;
 
@@ -511,12 +663,47 @@ public final class Camera2Capture {
         for (Size s : sizes) {
             if (s == null) continue;
 
+            if (map != null && targetFrameNs > 0L) {
+                try {
+                    long minFrameDuration = map.getOutputMinFrameDuration(ImageFormat.YUV_420_888, s);
+                    if (minFrameDuration > 0L && minFrameDuration > targetFrameNs) {
+                        // Cannot meet target FPS at this resolution.
+                        continue;
+                    }
+                } catch (Exception ignored) {
+                    // Keep candidate if the duration query fails.
+                }
+            }
+
             int w = s.getWidth();
             int h = s.getHeight();
 
             float aspect = h > 0 ? (float) w / (float) h : 0f;
             float aspectPenalty = Math.abs(aspect - targetAspect) * 1000f;
 
+            float sizePenalty = Math.abs(w - targetWidth) + Math.abs(h - targetHeight);
+
+            float score = aspectPenalty + sizePenalty;
+            if (score < bestScore) {
+                bestScore = score;
+                best = s;
+            }
+        }
+
+        // If all sizes were filtered out by minFrameDuration, fall back to original behavior.
+        if (best != null) {
+            return best;
+        }
+
+        // Fallback: closest size ignoring FPS feasibility.
+        for (Size s : sizes) {
+            if (s == null) continue;
+
+            int w = s.getWidth();
+            int h = s.getHeight();
+
+            float aspect = h > 0 ? (float) w / (float) h : 0f;
+            float aspectPenalty = Math.abs(aspect - targetAspect) * 1000f;
             float sizePenalty = Math.abs(w - targetWidth) + Math.abs(h - targetHeight);
 
             float score = aspectPenalty + sizePenalty;

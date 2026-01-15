@@ -22,10 +22,17 @@ namespace StargazerProbe.Camera
         [SerializeField] private int targetWidth = 1280;
         [SerializeField] private int targetHeight = 720;
         [SerializeField] private int targetFPS = 30;
+        [SerializeField, Range(1, 100)] private int targetJpegQuality = 75;
 
         [Header("Performance")]
         [Tooltip("Number of pixel buffers for encoding. More reduces GC but uses more memory")]
         [SerializeField] private int pixelBufferCount = 8;
+
+        [Tooltip("If enabled, bypass Unity JPEG decode + re-encode by emitting the Java JPEG directly (recommended for 30fps).")]
+        [SerializeField] private bool preferJpegPassthrough = true;
+
+        [Tooltip("Preview decode rate when JPEG passthrough is enabled (UI preview only).")]
+        [SerializeField] private int previewDecodeFPS = 10;
 
         // Public Properties - State
         public bool IsCapturing { get; private set; }
@@ -38,6 +45,7 @@ namespace StargazerProbe.Camera
 
         // Events
         public event Action<RawCameraFrameData> OnFrameCaptured;
+        public event Action<CameraFrameData> OnJpegCaptured;
         public event Action OnCaptureStarted;
         public event Action OnCaptureStopped;
         public event Action<string> OnCaptureStartFailed;
@@ -46,10 +54,21 @@ namespace StargazerProbe.Camera
         private float captureInterval;
         private float lastCaptureTime;
 
+        // FPS measurement (based on emitted frames, not Unity render FPS)
+        private float fpsWindowStartTime;
+        private int fpsWindowFrames;
+
         // Private Fields - Preview
         private Texture2D previewTexture;
         private int previewWidth;
         private int previewHeight;
+        private float previewDecodeInterval;
+        private float lastPreviewDecodeTime;
+
+        // Private Fields - Encoded passthrough
+        private int javaWidth;
+        private int javaHeight;
+        private int javaJpegQuality;
 
         // Private Fields - Buffer Pool
         private int bufferWidth;
@@ -69,12 +88,24 @@ namespace StargazerProbe.Camera
         private void Awake()
         {
             captureInterval = 1f / Mathf.Max(1, targetFPS);
+            previewDecodeInterval = 1f / Mathf.Max(1, previewDecodeFPS);
         }
 
         public void StartCapture()
         {
             if (IsCapturing)
                 return;
+
+            captureInterval = 1f / Mathf.Max(1, targetFPS);
+            previewDecodeInterval = 1f / Mathf.Max(1, previewDecodeFPS);
+            fpsWindowStartTime = 0f;
+            fpsWindowFrames = 0;
+            ActualFPS = 0f;
+            SkippedFrames = 0;
+
+            javaWidth = 0;
+            javaHeight = 0;
+            lastPreviewDecodeTime = 0f;
 
 #if UNITY_ANDROID && !UNITY_EDITOR
             StartCoroutine(InitializeCamera2());
@@ -117,7 +148,8 @@ namespace StargazerProbe.Camera
                     targetWidth,
                     targetHeight,
                     targetFPS,
-                    false // useFront
+                    false, // useFront
+                    targetJpegQuality
                 );
 
                 if (!ok)
@@ -131,6 +163,7 @@ namespace StargazerProbe.Camera
 
                 IsCapturing = true;
                 lastCaptureTime = Time.unscaledTime;
+                javaJpegQuality = 0;
                 OnCaptureStarted?.Invoke();
             }
             catch (Exception ex)
@@ -146,8 +179,6 @@ namespace StargazerProbe.Camera
         {
             if (!IsCapturing)
                 return;
-
-            ActualFPS = 1f / Mathf.Max(0.0001f, Time.deltaTime);
 
             if (Time.unscaledTime - lastCaptureTime < captureInterval)
                 return;
@@ -169,6 +200,66 @@ namespace StargazerProbe.Camera
                 byte[] jpeg = camera2.Call<byte[]>("consumeLatestJpeg");
                 if (jpeg == null || jpeg.Length == 0)
                     return;
+
+                // Fast path: emit encoded JPEG directly (avoids decode->pixels->encode).
+                if (preferJpegPassthrough && OnJpegCaptured != null)
+                {
+                    if (javaWidth <= 0 || javaHeight <= 0)
+                    {
+                        javaWidth = camera2.Call<int>("getWidth");
+                        javaHeight = camera2.Call<int>("getHeight");
+                    }
+
+                    if (javaJpegQuality <= 0)
+                    {
+                        javaJpegQuality = camera2.Call<int>("getJpegQuality");
+                    }
+
+                    // Update intrinsics periodically (cheap JNI call). Keep dimensions aligned.
+                    UpdateIntrinsicsFromJava();
+                    if (hasIntrinsics)
+                    {
+                        currentIntrinsics.ImageWidth = javaWidth;
+                        currentIntrinsics.ImageHeight = javaHeight;
+                    }
+
+                    var frameData = new CameraFrameData
+                    {
+                        Timestamp = Time.realtimeSinceStartup,
+                        ImageData = jpeg,
+                        Width = javaWidth > 0 ? javaWidth : targetWidth,
+                        Height = javaHeight > 0 ? javaHeight : targetHeight,
+                        Quality = javaJpegQuality > 0 ? javaJpegQuality : targetJpegQuality,
+                        Intrinsics = hasIntrinsics ? currentIntrinsics : default
+                    };
+
+                    OnJpegCaptured?.Invoke(frameData);
+
+                    // Keep UI preview working: decode at a lower rate to avoid killing FPS.
+                    if (Time.unscaledTime - lastPreviewDecodeTime >= previewDecodeInterval)
+                    {
+                        lastPreviewDecodeTime = Time.unscaledTime;
+                        EnsurePreviewTexture();
+                        ImageConversion.LoadImage(previewTexture, jpeg, markNonReadable: false);
+                    }
+
+                    // Update measured capture FPS (1-second window)
+                    if (fpsWindowStartTime <= 0f)
+                    {
+                        fpsWindowStartTime = Time.unscaledTime;
+                        fpsWindowFrames = 0;
+                    }
+                    fpsWindowFrames++;
+                    float dt = Time.unscaledTime - fpsWindowStartTime;
+                    if (dt >= 1.0f)
+                    {
+                        ActualFPS = fpsWindowFrames / Mathf.Max(0.0001f, dt);
+                        fpsWindowStartTime = Time.unscaledTime;
+                        fpsWindowFrames = 0;
+                    }
+
+                    return;
+                }
 
                 EnsurePreviewTexture();
 
@@ -223,6 +314,22 @@ namespace StargazerProbe.Camera
                     });
 
                     emitted = true;
+
+                    // Update measured capture FPS (1-second window)
+                    if (fpsWindowStartTime <= 0f)
+                    {
+                        fpsWindowStartTime = Time.unscaledTime;
+                        fpsWindowFrames = 0;
+                    }
+
+                    fpsWindowFrames++;
+                    float dt = Time.unscaledTime - fpsWindowStartTime;
+                    if (dt >= 1.0f)
+                    {
+                        ActualFPS = fpsWindowFrames / Mathf.Max(0.0001f, dt);
+                        fpsWindowStartTime = Time.unscaledTime;
+                        fpsWindowFrames = 0;
+                    }
                 }
                 finally
                 {
@@ -286,7 +393,9 @@ namespace StargazerProbe.Camera
             targetWidth = newWidth;
             targetHeight = newHeight;
             targetFPS = newFPS;
+            targetJpegQuality = Mathf.Clamp(newQuality, 1, 100);
             captureInterval = 1f / Mathf.Max(1, targetFPS);
+            previewDecodeInterval = 1f / Mathf.Max(1, previewDecodeFPS);
 
             if (wasCapturing)
             {

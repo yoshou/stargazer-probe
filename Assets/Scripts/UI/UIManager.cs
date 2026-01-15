@@ -80,43 +80,46 @@ namespace StargazerProbe.UI
             }
             else
             {
-                // Create CameraFrameEncoder
-                frameEncoder = new CameraFrameEncoder(System.Threading.SynchronizationContext.Current);
-                frameEncoder.Start();
-                
                 // Create IMUDataAccumulator
                 imuAccumulator = gameObject.AddComponent<IMUDataAccumulator>();
-                
-                // Set up callback chain: Capture → Encoder → IMUAccumulator → Grpc
-                
-                // 1. Pass raw data from Capture to Encoder
-                cameraCapture.OnFrameCaptured += (rawData) =>
+
+                // Camera2 fast path: use Java-provided JPEG directly (avoid decode+re-encode)
+                if (cameraCapture is StargazerProbe.Camera.Camera2CameraCapture camera2)
                 {
-                    // Enqueue raw data to encoder
-                    frameEncoder.TryEnqueue(
-                        rawData.Timestamp,
-                        rawData.Width,
-                        rawData.Height,
-                        jpegQuality,
-                        rawData.Pixels,
-                        rawData.Intrinsics,
-                        rawData.ReturnBufferCallback);
-                };
-                
-                // 2. Pass encoded data from Encoder to IMUAccumulator
-                frameEncoder.OnFrameEncoded += (frameData) =>
-                {
-                    // Callback for UI preview
-                    OnFrameCaptured(frameData);
-                    
-                    // Pass to IMU accumulator for combining with IMU samples
-                    if (imuAccumulator != null)
+                    camera2.OnJpegCaptured += (frameData) =>
                     {
-                        imuAccumulator.ProcessEncodedFrame(frameData);
-                    }
-                };
-                
-                // 3. Pass combined data from IMUAccumulator to Grpc
+                        OnFrameCaptured(frameData);
+                        imuAccumulator?.ProcessEncodedFrame(frameData);
+                    };
+                }
+                else
+                {
+                    // Default path: Capture → Encoder → IMUAccumulator → Grpc
+                    frameEncoder = new CameraFrameEncoder(System.Threading.SynchronizationContext.Current);
+                    frameEncoder.Start();
+
+                    // 1. Pass raw data from Capture to Encoder
+                    cameraCapture.OnFrameCaptured += (rawData) =>
+                    {
+                        frameEncoder.TryEnqueue(
+                            rawData.Timestamp,
+                            rawData.Width,
+                            rawData.Height,
+                            jpegQuality,
+                            rawData.Pixels,
+                            rawData.Intrinsics,
+                            rawData.ReturnBufferCallback);
+                    };
+
+                    // 2. Pass encoded data from Encoder to IMUAccumulator
+                    frameEncoder.OnFrameEncoded += (frameData) =>
+                    {
+                        OnFrameCaptured(frameData);
+                        imuAccumulator?.ProcessEncodedFrame(frameData);
+                    };
+                }
+
+                // Common: Pass combined data from IMUAccumulator to Grpc
                 imuAccumulator.OnFrameWithIMUReady += (frameWithIMU) =>
                 {
                     if (grpcDataStreamer != null)
