@@ -46,18 +46,6 @@ message CameraFrame {
   float distortion_k3 = 17;
 }
 
-message Pose {
-  Vector3 position = 1;
-  Quaternion rotation = 2;
-}
-
-message Quaternion {
-  float x = 1;
-  float y = 2;
-  float z = 3;
-  float w = 4;
-}
-
 message Vector3 {
   float x = 1;
   float y = 2;
