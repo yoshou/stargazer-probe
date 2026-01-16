@@ -50,10 +50,7 @@ public final class Camera2Capture {
     private int targetFpsRequested = 30;
 
     // Diagnostics
-    private Range<Integer> activeFpsRange;
-    private long fpsWindowStartNs;
-    private int fpsWindowFrames;
-    private long fpsWindowProcNs;
+    private final FpsTracker fpsTracker = new FpsTracker();
 
     private boolean isFrontFacing;
     private int sensorOrientation;
@@ -101,7 +98,7 @@ public final class Camera2Capture {
             Integer so = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
             sensorOrientation = so != null ? so : 0;
 
-            resetDiagnostics();
+            fpsTracker.reset();
 
             int w = selectedSize.getWidth();
             int h = selectedSize.getHeight();
@@ -149,7 +146,7 @@ public final class Camera2Capture {
         }
 
         isProcessingImage.set(false);
-        resetDiagnostics();
+        fpsTracker.reset();
 
         try {
             if (captureSession != null) {
@@ -328,7 +325,18 @@ public final class Camera2Capture {
                 jpegQueue.addLast(jpeg);
             }
 
-            updateFpsDiagnostics(image.getTimestamp(), procEndNs - procStartNs);
+            long timestamp = image.getTimestamp();
+            fpsTracker.update(timestamp, procEndNs - procStartNs);
+
+            if (fpsTracker.isWindowElapsed(timestamp)) {
+                double fps = fpsTracker.getFps(timestamp);
+                double avgProcMs = fpsTracker.getAvgProcessingMs();
+                Log.i(TAG, "Camera2 incomingFPS=" + String.format("%.1f", fps)
+                        + " size=" + (selectedSize != null ? (selectedSize.getWidth() + "x" + selectedSize.getHeight()) : "?")
+                        + " jpegQ=" + jpegQuality
+                        + " avgProcMs=" + String.format("%.2f", avgProcMs));
+                fpsTracker.resetWindow(timestamp);
+            }
         } catch (Exception e) {
             Log.e(TAG, "onImageAvailable failed", e);
         } finally {
@@ -338,13 +346,6 @@ public final class Camera2Capture {
 
             isProcessingImage.set(false);
         }
-    }
-
-    private void resetDiagnostics() {
-        activeFpsRange = null;
-        fpsWindowStartNs = 0L;
-        fpsWindowFrames = 0;
-        fpsWindowProcNs = 0L;
     }
 
     private void configureCaptureRequest(CaptureRequest.Builder builder, int targetFps) {
@@ -368,35 +369,62 @@ public final class Camera2Capture {
         Range<Integer> fpsRange = chooseFpsRange(characteristics, targetFps);
         if (fpsRange != null) {
             builder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fpsRange);
-            activeFpsRange = fpsRange;
         }
     }
 
-    private void updateFpsDiagnostics(long timestampNs, long processingTimeNs) {
-        if (timestampNs <= 0) {
-            return;
-        }
+    private static final class FpsTracker {
+        private long fpsWindowStartNs;
+        private int fpsWindowFrames;
+        private long fpsWindowProcNs;
 
-        if (fpsWindowStartNs == 0L) {
-            fpsWindowStartNs = timestampNs;
+        public void reset() {
+            fpsWindowStartNs = 0L;
             fpsWindowFrames = 0;
             fpsWindowProcNs = 0L;
         }
 
-        fpsWindowFrames++;
-        fpsWindowProcNs += Math.max(0L, processingTimeNs);
-        long dt = timestampNs - fpsWindowStartNs;
+        public void update(long timestampNs, long processingTimeNs) {
+            if (timestampNs <= 0) {
+                return;
+            }
 
-        if (dt >= 1_000_000_000L) {
-            double fps = (fpsWindowFrames * 1_000_000_000.0) / (double) dt;
-            double avgProcMs = fpsWindowFrames > 0 ? (fpsWindowProcNs / 1_000_000.0) / (double) fpsWindowFrames : 0.0;
+            if (fpsWindowStartNs == 0L) {
+                fpsWindowStartNs = timestampNs;
+                fpsWindowFrames = 0;
+                fpsWindowProcNs = 0L;
+            }
 
-            Log.i(TAG, "Camera2 incomingFPS=" + String.format("%.1f", fps)
-                    + " size=" + (selectedSize != null ? (selectedSize.getWidth() + "x" + selectedSize.getHeight()) : "?")
-                    + " aeFpsRange=" + (activeFpsRange != null ? activeFpsRange.toString() : "null")
-                    + " jpegQ=" + jpegQuality
-                    + " avgProcMs=" + String.format("%.2f", avgProcMs));
+            fpsWindowFrames++;
+            fpsWindowProcNs += Math.max(0L, processingTimeNs);
+        }
 
+        public boolean isWindowElapsed(long timestampNs) {
+            if (fpsWindowStartNs == 0L || timestampNs <= 0) {
+                return false;
+            }
+            long dt = timestampNs - fpsWindowStartNs;
+            return dt >= 1_000_000_000L;
+        }
+
+        public double getFps(long timestampNs) {
+            if (fpsWindowStartNs == 0L) {
+                return 0.0;
+            }
+            long dt = timestampNs - fpsWindowStartNs;
+            if (dt <= 0) {
+                return 0.0;
+            }
+            return (fpsWindowFrames * 1_000_000_000.0) / (double) dt;
+        }
+
+        public double getAvgProcessingMs() {
+            if (fpsWindowFrames <= 0) {
+                return 0.0;
+            }
+            return (fpsWindowProcNs / 1_000_000.0) / (double) fpsWindowFrames;
+        }
+
+        public void resetWindow(long timestampNs) {
             fpsWindowStartNs = timestampNs;
             fpsWindowFrames = 0;
             fpsWindowProcNs = 0L;
