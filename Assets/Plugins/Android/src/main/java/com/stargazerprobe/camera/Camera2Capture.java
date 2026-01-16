@@ -43,10 +43,7 @@ public final class Camera2Capture {
     // FIFO queue of encoded JPEG frames to avoid drops caused by polling.
     // Unity will drain this queue via consumeNextJpeg().
     private final ArrayDeque<byte[]> jpegQueue = new ArrayDeque<>();
-    private final ArrayDeque<Long> timestampQueue = new ArrayDeque<>();
     private int maxQueuedFrames = 32; // ~1s at 30fps
-    private long droppedFrames;
-    private long latestTimestampNs;
 
     // Diagnostics
     private Range<Integer> activeFpsRange;
@@ -55,9 +52,7 @@ public final class Camera2Capture {
 
     // JPEG quality (1-100). Lower is faster/smaller.
     private int jpegQuality = 75;
-    private int requestedJpegQuality = 75;
     private int targetFpsRequested = 30;
-    private boolean adaptiveJpegQuality = false;
 
     // Processing-time diagnostics (windowed)
     private long fpsWindowProcNs;
@@ -87,8 +82,7 @@ public final class Camera2Capture {
             return false;
         }
 
-        this.requestedJpegQuality = Math.max(1, Math.min(100, jpegQuality));
-        this.jpegQuality = this.requestedJpegQuality;
+        this.jpegQuality = Math.max(1, Math.min(100, jpegQuality));
         this.targetFpsRequested = Math.max(1, targetFps);
 
         try {
@@ -158,9 +152,6 @@ public final class Camera2Capture {
     public void stop() {
         synchronized (frameLock) {
             jpegQueue.clear();
-            timestampQueue.clear();
-            latestTimestampNs = 0L;
-            droppedFrames = 0L;
         }
 
         isProcessingImage.set(false);
@@ -202,45 +193,12 @@ public final class Camera2Capture {
         sensorOrientation = 0;
     }
 
-    public byte[] consumeLatestJpeg() {
-        synchronized (frameLock) {
-            // Backward compatible behavior: return the most recent frame and drop older queued frames.
-            if (jpegQueue.isEmpty()) {
-                return null;
-            }
-
-            byte[] latest = null;
-            while (!jpegQueue.isEmpty()) {
-                latest = jpegQueue.removeLast();
-            }
-            timestampQueue.clear();
-            return latest;
-        }
-    }
-
-    // Preferred API: consume frames in order (oldest first).
     public byte[] consumeNextJpeg() {
         synchronized (frameLock) {
             if (jpegQueue.isEmpty()) {
                 return null;
             }
-            // Keep timestamp queue aligned.
-            if (!timestampQueue.isEmpty()) {
-                timestampQueue.removeFirst();
-            }
             return jpegQueue.removeFirst();
-        }
-    }
-
-    public int getPendingJpegCount() {
-        synchronized (frameLock) {
-            return jpegQueue.size();
-        }
-    }
-
-    public long getDroppedJpegFrames() {
-        synchronized (frameLock) {
-            return droppedFrames;
         }
     }
 
@@ -254,20 +212,6 @@ public final class Camera2Capture {
 
     public int getJpegQuality() {
         return jpegQuality;
-    }
-
-    public int getRequestedJpegQuality() {
-        return requestedJpegQuality;
-    }
-
-    public boolean getAdaptiveJpegQualityEnabled() {
-        return adaptiveJpegQuality;
-    }
-
-    public long getLatestTimestampNs() {
-        synchronized (frameLock) {
-            return latestTimestampNs;
-        }
     }
 
     public boolean getIsFrontFacing() {
@@ -345,9 +289,9 @@ public final class Camera2Capture {
                         builder.addTarget(imageReader.getSurface());
 
                         // JPEG quality is only applicable when output is JPEG.
-                        // Use the requested quality (1-100). Camera2 expects a Byte.
+                        // Use the quality setting (1-100). Camera2 expects a Byte.
                         try {
-                            builder.set(CaptureRequest.JPEG_QUALITY, (byte) Math.max(1, Math.min(100, requestedJpegQuality)));
+                            builder.set(CaptureRequest.JPEG_QUALITY, (byte) Math.max(1, Math.min(100, jpegQuality)));
                         } catch (Exception ignored) {
                             // Some devices may ignore or reject this key in certain templates.
                         }
@@ -404,21 +348,13 @@ public final class Camera2Capture {
             }
 
             synchronized (frameLock) {
-                long ts = image.getTimestamp();
-                latestTimestampNs = ts;
-
                 // Bound queue to avoid unbounded memory growth.
-                // If consumer falls behind, drop oldest frames (counted) rather than OOM.
+                // If consumer falls behind, drop oldest frames rather than OOM.
                 while (jpegQueue.size() >= Math.max(1, maxQueuedFrames)) {
                     jpegQueue.removeFirst();
-                    if (!timestampQueue.isEmpty()) {
-                        timestampQueue.removeFirst();
-                    }
-                    droppedFrames++;
                 }
 
                 jpegQueue.addLast(jpeg);
-                timestampQueue.addLast(ts);
             }
 
             // Periodic incoming-frame FPS diagnostics (based on camera timestamps).
@@ -439,7 +375,7 @@ public final class Camera2Capture {
                     Log.i(TAG, "Camera2 incomingFPS=" + String.format("%.1f", fps)
                             + " size=" + (selectedSize != null ? (selectedSize.getWidth() + "x" + selectedSize.getHeight()) : "?")
                             + " aeFpsRange=" + (activeFpsRange != null ? activeFpsRange.toString() : "null")
-                            + " jpegQ=" + this.requestedJpegQuality
+                            + " jpegQ=" + this.jpegQuality
                             + " avgProcMs=" + String.format("%.2f", avgProcMs));
                     fpsWindowStartNs = ts;
                     fpsWindowFrames = 0;
