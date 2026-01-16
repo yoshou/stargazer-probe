@@ -5,46 +5,56 @@ namespace StargazerProbe.Grpc
 {
     public static class ProtoConverters
     {
-        public static Stargazer.Vector3 ToProto(Vector3 v)
+        public static Stargazer.Vector3D ToProtoVector3D(Vector3 v)
         {
-            return new Stargazer.Vector3 { X = v.x, Y = v.y, Z = v.z };
+            return new Stargazer.Vector3D { X = v.x, Y = v.y, Z = v.z };
         }
 
-        public static Stargazer.SensorData ToProto(StargazerProbe.Sensors.SensorData sensor)
+        public static Stargazer.Vector2D ToProtoVector2D(Vector2 v)
         {
-            return new Stargazer.SensorData
+            return new Stargazer.Vector2D { X = v.x, Y = v.y };
+        }
+
+        public static Stargazer.IntVector2D ToProtoIntVector2D(int x, int y)
+        {
+            return new Stargazer.IntVector2D { X = x, Y = y };
+        }
+
+        public static Stargazer.Inertial ToProtoInertial(StargazerProbe.Sensors.SensorData sensor)
+        {
+            return new Stargazer.Inertial
             {
-                Acceleration = ToProto(sensor.Acceleration),
-                Gyroscope = ToProto(sensor.Gyroscope),
-                Magnetometer = ToProto(sensor.Magnetometer),
-                Gravity = ToProto(sensor.Gravity)
+                Acceleration = ToProtoVector3D(sensor.Acceleration),
+                Gyroscope = ToProtoVector3D(sensor.Gyroscope),
+                Magnetometer = ToProtoVector3D(sensor.Magnetometer),
+                Gravity = ToProtoVector3D(sensor.Gravity)
             };
         }
 
-        public static Stargazer.CameraFrame ToProto(StargazerProbe.Camera.CameraFrameData frame)
+        public static Stargazer.CameraImage ToProtoCameraImage(StargazerProbe.Camera.CameraFrameData frame)
         {
-            var msg = new Stargazer.CameraFrame
+            var intrinsics = new Stargazer.CameraIntrinsics
+            {
+                FocalLength = ToProtoVector2D(new Vector2(frame.Intrinsics.FocalLengthX, frame.Intrinsics.FocalLengthY)),
+                PrincipalPoint = ToProtoVector2D(new Vector2(frame.Intrinsics.PrincipalPointX, frame.Intrinsics.PrincipalPointY)),
+                ImageSize = ToProtoIntVector2D(frame.Intrinsics.ImageWidth, frame.Intrinsics.ImageHeight),
+                Distortion = new Stargazer.DistortionCoefficients
+                {
+                    K1 = 0f,
+                    K2 = 0f,
+                    P1 = 0f,
+                    P2 = 0f,
+                    K3 = 0f
+                }
+            };
+
+            return new Stargazer.CameraImage
             {
                 ImageData = ByteString.CopyFrom(frame.ImageData ?? System.Array.Empty<byte>()),
-                Width = frame.Width,
-                Height = frame.Height,
-                Quality = frame.Quality,
-                CameraTimestamp = frame.Timestamp,
-                DistortionK1 = 0f,
-                DistortionK2 = 0f,
-                DistortionP1 = 0f,
-                DistortionP2 = 0f,
-                DistortionK3 = 0f,
+                ImageSize = ToProtoIntVector2D(frame.Width, frame.Height),
+                Format = (Stargazer.CameraImage.Types.ImageFormat)frame.Quality,
+                Intrinsics = intrinsics
             };
-
-            msg.FocalLengthX = frame.Intrinsics.FocalLengthX;
-            msg.FocalLengthY = frame.Intrinsics.FocalLengthY;
-            msg.PrincipalPointX = frame.Intrinsics.PrincipalPointX;
-            msg.PrincipalPointY = frame.Intrinsics.PrincipalPointY;
-            msg.IntrinsicsImageWidth = frame.Intrinsics.ImageWidth;
-            msg.IntrinsicsImageHeight = frame.Intrinsics.ImageHeight;
-
-            return msg;
         }
     }
 }

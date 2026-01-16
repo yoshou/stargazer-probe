@@ -7,75 +7,90 @@
 
 #include <grpcpp/grpcpp.h>
 
-#include "sensor_stream.grpc.pb.h"
+#include "sensor.grpc.pb.h"
 
 namespace {
 
-class SensorStreamServiceImpl final : public stargazer::SensorStream::Service {
+class SensorServiceImpl final : public stargazer::Sensor::Service {
 public:
-  grpc::Status StreamData(
+  grpc::Status PublishCameraImage(
       grpc::ServerContext* context,
-      grpc::ServerReaderWriter<stargazer::DataResponse, stargazer::DataPacket>* stream) override {
-    std::cout << "[StreamData] client connected. peer=" << (context ? context->peer() : "(null)") << std::endl;
+      grpc::ServerReader<stargazer::CameraImageMessage>* reader,
+      google::protobuf::Empty* response) override {
+    std::cout << "[PublishCameraImage] client connected. peer=" << (context ? context->peer() : "(null)") << std::endl;
 
-    stargazer::DataPacket packet;
+    stargazer::CameraImageMessage msg;
     int32_t received = 0;
 
-    while (stream->Read(&packet)) {
+    while (reader->Read(&msg)) {
       ++received;
 
-      // Minimal logging (avoid printing image bytes)
-      const std::string& device_id = packet.device_id();
-      const int image_bytes = packet.has_camera() ? static_cast<int>(packet.camera().image_data().size()) : 0;
-      const int imu_count = packet.imu_samples_size();
+      const std::string& name = msg.name();
+      const int64_t timestamp = msg.timestamp();
+      const int num_images = msg.values_size();
 
       if ((received % 30) == 1) {
-        std::cout << "[StreamData] received=" << received
-                  << " device_id='" << device_id << "'"
-                  << " ts=" << packet.timestamp()
-                  << " image_bytes=" << image_bytes
-                  << " imu_samples=" << imu_count
-                  ;
+        std::cout << "[PublishCameraImage] received=" << received
+                  << " name='" << name << "'"
+                  << " timestamp=" << timestamp
+                  << " images=" << num_images;
 
-        if (packet.has_camera()) {
-          const auto& c = packet.camera();
-          const bool has_intrinsics =
-              c.focal_length_x() != 0.0f || c.focal_length_y() != 0.0f ||
-              c.principal_point_x() != 0.0f || c.principal_point_y() != 0.0f ||
-              c.intrinsics_image_width() != 0 || c.intrinsics_image_height() != 0;
+        if (num_images > 0) {
+          const auto& img = msg.values(0);
+          const int image_bytes = static_cast<int>(img.image_data().size());
+          std::cout << " image_bytes=" << image_bytes;
 
-          if (has_intrinsics) {
-          std::cout << " intrinsics={fx=" << c.focal_length_x()
-                    << ", fy=" << c.focal_length_y()
-                    << ", cx=" << c.principal_point_x()
-                    << ", cy=" << c.principal_point_y()
-                    << ", w=" << c.intrinsics_image_width()
-                    << ", h=" << c.intrinsics_image_height()
-                    << "}"
-                    << " distortion={k1=" << c.distortion_k1()
-                    << ", k2=" << c.distortion_k2()
-                    << ", p1=" << c.distortion_p1()
-                    << ", p2=" << c.distortion_p2()
-                    << ", k3=" << c.distortion_k3()
-                    << "}";
+          if (img.has_intrinsics()) {
+            const auto& intr = img.intrinsics();
+            std::cout << " intrinsics={fx=" << intr.focal_length().x()
+                      << ", fy=" << intr.focal_length().y()
+                      << ", cx=" << intr.principal_point().x()
+                      << ", cy=" << intr.principal_point().y()
+                      << ", w=" << intr.image_size().x()
+                      << ", h=" << intr.image_size().y()
+                      << "}";
+            if (intr.has_distortion()) {
+              const auto& dist = intr.distortion();
+              std::cout << " distortion={k1=" << dist.k1()
+                        << ", k2=" << dist.k2()
+                        << ", p1=" << dist.p1()
+                        << ", p2=" << dist.p2()
+                        << ", k3=" << dist.k3()
+                        << "}";
+            }
           }
         }
 
         std::cout << std::endl;
       }
+    }
 
-      stargazer::DataResponse resp;
-      resp.set_success(true);
-      resp.set_received_packets(received);
-      resp.set_message("ok");
+    std::cout << "[PublishCameraImage] stream ended. total_received=" << received << std::endl;
+    return grpc::Status::OK;
+  }
 
-      // Echo a response for each packet (bidi stream)
-      if (!stream->Write(resp)) {
-        break;
+  grpc::Status PublishInertial(
+      grpc::ServerContext* context,
+      grpc::ServerReader<stargazer::InertialMessage>* reader,
+      google::protobuf::Empty* response) override {
+    std::cout << "[PublishInertial] client connected. peer=" << (context ? context->peer() : "(null)") << std::endl;
+
+    stargazer::InertialMessage msg;
+    int32_t received = 0;
+
+    while (reader->Read(&msg)) {
+      ++received;
+
+      if ((received % 100) == 1) {
+        std::cout << "[PublishInertial] received=" << received
+                  << " name='" << msg.name() << "'"
+                  << " timestamp=" << msg.timestamp()
+                  << " samples=" << msg.values_size()
+                  << std::endl;
       }
     }
 
-    std::cout << "[StreamData] stream ended. total_received=" << received << std::endl;
+    std::cout << "[PublishInertial] stream ended. total_received=" << received << std::endl;
     return grpc::Status::OK;
   }
 };
@@ -96,7 +111,7 @@ int main(int argc, char** argv) {
   const std::string port = GetArg(argc, argv, "--port", "50051");
   const std::string address = host + ":" + port;
 
-  SensorStreamServiceImpl service;
+  SensorServiceImpl service;
 
   grpc::ServerBuilder builder;
   builder.AddListeningPort(address, grpc::InsecureServerCredentials());

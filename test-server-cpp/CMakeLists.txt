@@ -12,12 +12,12 @@ set(PROTO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/proto")
 set(GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${GEN_DIR}")
 
-set(PROTO_FILE "${PROTO_DIR}/sensor_stream.proto")
+set(PROTO_FILE "${PROTO_DIR}/sensor.proto")
 
-set(PROTO_SRC "${GEN_DIR}/sensor_stream.pb.cc")
-set(PROTO_HDR "${GEN_DIR}/sensor_stream.pb.h")
-set(GRPC_SRC "${GEN_DIR}/sensor_stream.grpc.pb.cc")
-set(GRPC_HDR "${GEN_DIR}/sensor_stream.grpc.pb.h")
+set(PROTO_SRC "${GEN_DIR}/sensor.pb.cc")
+set(PROTO_HDR "${GEN_DIR}/sensor.pb.h")
+set(GRPC_SRC "${GEN_DIR}/sensor.grpc.pb.cc")
+set(GRPC_HDR "${GEN_DIR}/sensor.grpc.pb.h")
 
 add_custom_command(
   OUTPUT
@@ -29,7 +29,7 @@ add_custom_command(
     --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>
     ${PROTO_FILE}
   DEPENDS "${PROTO_FILE}" protobuf::protoc gRPC::grpc_cpp_plugin
-  COMMENT "Generating C++ sources from sensor_stream.proto"
+  COMMENT "Generating C++ sources from sensor.proto"
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 

@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 PROTO_DIR="${REPO_ROOT}/Assets/Scripts/Grpc/Proto"
 GEN_DIR="${REPO_ROOT}/Assets/Scripts/Grpc/Generated"
-PROTO_FILE="${PROTO_DIR}/sensor_stream.proto"
+PROTO_FILE="${PROTO_DIR}/sensor.proto"
 
 if [[ ! -f "${PROTO_FILE}" ]]; then
   echo "ERROR: Proto file not found: ${PROTO_FILE}" >&2

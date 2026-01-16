@@ -1,0 +1,148 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+package stargazer;
+
+service Sensor {
+  rpc SubscribeQuat(SubscribeRequest) returns (stream QuatMessage) {}
+  rpc SubscribeCircle(SubscribeRequest) returns (stream CircleMessage) {}
+  rpc SubscribeSphere(SubscribeRequest) returns (stream SphereMessage) {}
+  rpc PublishSE3(stream SE3Message) returns (google.protobuf.Empty) {}
+  rpc PublishCameraImage(stream CameraImageMessage) returns (google.protobuf.Empty) {}
+  rpc PublishInertial(stream InertialMessage) returns (google.protobuf.Empty) {}
+}
+
+message SubscribeRequest {
+  string name = 1;
+}
+
+message CircleMessage {
+  string name = 1;
+  int64 timestamp = 2;
+  repeated Circle values = 3;
+}
+
+message SphereMessage {
+  string name = 1;
+  int64 timestamp = 2;
+  repeated Sphere values = 3;
+}
+
+message QuatMessage {
+  string name = 1;
+  int64 timestamp = 2;
+  repeated Quat values = 3;
+}
+
+message SE3Message {
+  string name = 1;
+  int64 timestamp = 2;
+  repeated SE3 values = 3;
+}
+
+message Point2D {
+  double x = 1;
+  double y = 2;
+}
+
+message Vector2D {
+  double x = 1;
+  double y = 2;
+}
+
+message IntVector2D {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+message Circle {
+  Point2D point = 1;
+  double radius = 2;
+}
+
+message Vector3D {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+message Point3D {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+message Sphere {
+  Point3D point = 1;
+  double radius = 2;
+}
+
+message Matrix {
+  uint32 rows = 1;
+  uint32 cols = 2;
+  repeated double values = 3 [packed=true];
+}
+
+message Quat {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+  double w = 4;
+}
+
+message SO3 {
+  Quat q = 1;
+}
+
+message SE3 {
+  Vector3D t = 1;
+  Quat q = 2;
+}
+
+message DistortionCoefficients {
+  double k1 = 1;
+  double k2 = 2;
+  double p1 = 3;
+  double p2 = 4;
+  double k3 = 5;
+}
+
+message CameraIntrinsics {
+  Vector2D focal_length = 1;
+  Vector2D principal_point = 2;
+  IntVector2D image_size = 3;
+  DistortionCoefficients distortion = 4;
+}
+
+message CameraImage {
+  enum ImageFormat {
+    UNKNOWN = 0;
+    JPEG = 1;
+    PNG = 2;
+    RAW = 3;
+  }
+  bytes image_data = 1;
+  IntVector2D image_size = 2;
+  ImageFormat format = 3;
+  CameraIntrinsics intrinsics = 4;
+}
+
+message CameraImageMessage {
+  string name = 1;
+  int64 timestamp = 2;
+  repeated CameraImage values = 3;
+}
+
+message Inertial {
+  Vector3D acceleration = 1;
+  Vector3D gyroscope = 2;
+  Vector3D magnetometer = 3;
+  Vector3D gravity = 4;
+}
+
+message InertialMessage {
+  string name = 1;
+  int64 timestamp = 2;
+  repeated Inertial values = 3;
+}

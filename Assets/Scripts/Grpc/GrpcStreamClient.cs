@@ -21,11 +21,10 @@ namespace StargazerProbe.Grpc
     {
         // Public Properties
         public GrpcConnectionState State { get; private set; } = GrpcConnectionState.Disconnected;
-        public bool IsConnected => State == GrpcConnectionState.Connected && call != null;
+        public bool IsConnected => State == GrpcConnectionState.Connected && cameraImageCall != null;
 
         // Events
         public event Action<GrpcConnectionState> OnStateChanged;
-        public event Action<Stargazer.DataResponse> OnResponse;
         public event Action<string> OnError;
 
         // Private Fields - Context
@@ -33,8 +32,9 @@ namespace StargazerProbe.Grpc
 
         // Private Fields - gRPC
         private GrpcChannel channel;
-        private Stargazer.SensorStream.SensorStreamClient client;
-        private AsyncDuplexStreamingCall<Stargazer.DataPacket, Stargazer.DataResponse> call;
+        private Stargazer.Sensor.SensorClient client;
+        private AsyncClientStreamingCall<Stargazer.CameraImageMessage, Google.Protobuf.WellKnownTypes.Empty> cameraImageCall;
+        private AsyncClientStreamingCall<Stargazer.InertialMessage, Google.Protobuf.WellKnownTypes.Empty> inertialCall;
         private CancellationTokenSource cts;
 
         public GrpcStreamClient(SynchronizationContext unityContext)
@@ -71,39 +71,23 @@ namespace StargazerProbe.Grpc
                     HttpHandler = httpHandler
                 });
 
-                client = new Stargazer.SensorStream.SensorStreamClient(channel);
-                call = client.StreamData(cancellationToken: cts.Token);
+                client = new Stargazer.Sensor.SensorClient(channel);
+                cameraImageCall = client.PublishCameraImage(cancellationToken: cts.Token);
+                inertialCall = client.PublishInertial(cancellationToken: cts.Token);
 
-                // Handshake: send one tiny packet and wait briefly for a response.
-                // This proves HTTP/2 + gRPC stream is actually established (TCP reachability alone is not enough).
-                var handshakePacket = new Stargazer.DataPacket
+                // Handshake: send one tiny message to verify stream establishment
+                var handshakeCamera = new Stargazer.CameraImageMessage
                 {
                     Timestamp = 0,
-                    DeviceId = "handshake"
+                    Name = "handshake"
                 };
 
-                await call.RequestStream.WriteAsync(handshakePacket).ConfigureAwait(false);
+                await cameraImageCall.RequestStream.WriteAsync(handshakeCamera).ConfigureAwait(false);
 
-                var moveNextTask = call.ResponseStream.MoveNext(cts.Token);
-                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(3), cts.Token);
-                var completed = await Task.WhenAny(moveNextTask, timeoutTask).ConfigureAwait(false);
-                if (completed != moveNextTask)
-                {
-                    throw new TimeoutException("Handshake timeout (no response from server)");
-                }
-
-                // Consume first response so the background loop doesn't re-emit it.
-                if (moveNextTask.Result)
-                {
-                    var first = call.ResponseStream.Current;
-                    if (first != null)
-                    {
-                        PostToUnity(() => OnResponse?.Invoke(first));
-                    }
-                }
+                // Brief delay to ensure stream is established
+                await Task.Delay(TimeSpan.FromMilliseconds(100), cts.Token).ConfigureAwait(false);
 
                 SetState(GrpcConnectionState.Connected);
-                _ = Task.Run(() => ReadResponsesLoopAsync(call.ResponseStream, cts.Token), cts.Token);
             }
             catch (Exception ex)
             {
@@ -152,43 +136,20 @@ namespace StargazerProbe.Grpc
                 "If it still isn't available, switch to gRPC-Web (HTTP/1.1) via Grpc.Net.Client.Web + grpcwebproxy/Envoy on the server.");
         }
 
-        public async Task SendAsync(Stargazer.DataPacket packet)
+        public async Task SendCameraImageAsync(Stargazer.CameraImageMessage message)
         {
-            if (call == null)
-                throw new InvalidOperationException("gRPC stream is not established");
+            if (cameraImageCall == null)
+                throw new InvalidOperationException("gRPC camera stream is not established");
 
-            await call.RequestStream.WriteAsync(packet).ConfigureAwait(false);
+            await cameraImageCall.RequestStream.WriteAsync(message).ConfigureAwait(false);
         }
 
-        private async Task ReadResponsesLoopAsync(IAsyncStreamReader<Stargazer.DataResponse> responseStream, CancellationToken cancellationToken)
+        public async Task SendInertialAsync(Stargazer.InertialMessage message)
         {
-            try
-            {
-                while (await responseStream.MoveNext(cancellationToken).ConfigureAwait(false))
-                {
-                    var response = responseStream.Current;
-                    if (response == null)
-                        continue;
+            if (inertialCall == null)
+                throw new InvalidOperationException("gRPC inertial stream is not established");
 
-                    PostToUnity(() => OnResponse?.Invoke(response));
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // normal
-            }
-            catch (Exception ex)
-            {
-                // If we are cancelling (Stop/Dispose), don't treat as an error.
-                if (!cancellationToken.IsCancellationRequested)
-                {
-                    EmitError($"Response loop error: {ex.Message}");
-                }
-            }
-            finally
-            {
-                SetState(GrpcConnectionState.Disconnected);
-            }
+            await inertialCall.RequestStream.WriteAsync(message).ConfigureAwait(false);
         }
 
         public async Task DisconnectAsync()
@@ -200,13 +161,22 @@ namespace StargazerProbe.Grpc
             {
                 cts?.Cancel();
 
-                if (call != null)
+                if (cameraImageCall != null)
                 {
-                    try { await call.RequestStream.CompleteAsync().ConfigureAwait(false); }
+                    try { await cameraImageCall.RequestStream.CompleteAsync().ConfigureAwait(false); }
                     catch { /* ignore */ }
 
-                    call.Dispose();
-                    call = null;
+                    cameraImageCall.Dispose();
+                    cameraImageCall = null;
+                }
+
+                if (inertialCall != null)
+                {
+                    try { await inertialCall.RequestStream.CompleteAsync().ConfigureAwait(false); }
+                    catch { /* ignore */ }
+
+                    inertialCall.Dispose();
+                    inertialCall = null;
                 }
 
                 channel?.Dispose();
