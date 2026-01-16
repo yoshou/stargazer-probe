@@ -60,8 +60,6 @@ namespace StargazerProbe.Camera
 
         // Private Fields - Preview
         private Texture2D previewTexture;
-        private int previewWidth;
-        private int previewHeight;
         private float previewDecodeInterval;
         private float lastPreviewDecodeTime;
 
@@ -163,7 +161,6 @@ namespace StargazerProbe.Camera
 
                 IsCapturing = true;
                 lastCaptureTime = Time.unscaledTime;
-                javaJpegQuality = 0;
                 OnCaptureStarted?.Invoke();
             }
             catch (Exception ex)
@@ -185,6 +182,24 @@ namespace StargazerProbe.Camera
 
             lastCaptureTime = Time.unscaledTime;
             CaptureFrame();
+        }
+
+        private void UpdateCaptureFPS()
+        {
+            if (fpsWindowStartTime <= 0f)
+            {
+                fpsWindowStartTime = Time.unscaledTime;
+                fpsWindowFrames = 0;
+            }
+
+            fpsWindowFrames++;
+            float dt = Time.unscaledTime - fpsWindowStartTime;
+            if (dt >= 1.0f)
+            {
+                ActualFPS = fpsWindowFrames / Mathf.Max(0.0001f, dt);
+                fpsWindowStartTime = Time.unscaledTime;
+                fpsWindowFrames = 0;
+            }
         }
 
         private void CaptureFrame()
@@ -243,22 +258,7 @@ namespace StargazerProbe.Camera
                         };
 
                         OnJpegCaptured?.Invoke(frameData);
-
-                        // Update measured capture FPS (1-second window)
-                        if (fpsWindowStartTime <= 0f)
-                        {
-                            fpsWindowStartTime = Time.unscaledTime;
-                            fpsWindowFrames = 0;
-                        }
-                        fpsWindowFrames++;
-                        float dt = Time.unscaledTime - fpsWindowStartTime;
-                        if (dt >= 1.0f)
-                        {
-                            ActualFPS = fpsWindowFrames / Mathf.Max(0.0001f, dt);
-                            fpsWindowStartTime = Time.unscaledTime;
-                            fpsWindowFrames = 0;
-                        }
-
+                        UpdateCaptureFPS();
                         continue;
                     }
 
@@ -316,22 +316,7 @@ namespace StargazerProbe.Camera
                         });
 
                         emitted = true;
-
-                        // Update measured capture FPS (1-second window)
-                        if (fpsWindowStartTime <= 0f)
-                        {
-                            fpsWindowStartTime = Time.unscaledTime;
-                            fpsWindowFrames = 0;
-                        }
-
-                        fpsWindowFrames++;
-                        float dt = Time.unscaledTime - fpsWindowStartTime;
-                        if (dt >= 1.0f)
-                        {
-                            ActualFPS = fpsWindowFrames / Mathf.Max(0.0001f, dt);
-                            fpsWindowStartTime = Time.unscaledTime;
-                            fpsWindowFrames = 0;
-                        }
+                        UpdateCaptureFPS();
                     }
                     finally
                     {
@@ -432,9 +417,6 @@ namespace StargazerProbe.Camera
                     filterMode = FilterMode.Bilinear,
                     wrapMode = TextureWrapMode.Clamp
                 };
-
-                previewWidth = previewTexture.width;
-                previewHeight = previewTexture.height;
             }
         }
 
@@ -481,6 +463,8 @@ namespace StargazerProbe.Camera
                 availableBuffers.Enqueue(buffer);
             }
         }
+
+        // ========== Platform-Specific Methods (Android Camera2) ==========
 
 #if UNITY_ANDROID && !UNITY_EDITOR
         private void UpdateOrientationFlags()
