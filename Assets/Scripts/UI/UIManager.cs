@@ -212,7 +212,7 @@ namespace StargazerProbe.UI
                 float fps = frameCount / (Time.time - lastFpsUpdate);
                 if (fpsCounterText != null)
                 {
-                    fpsCounterText.text = $"FPS: {fps:F1}";
+                    fpsCounterText.text = $"FPS: {Mathf.Round(fps * 10f) / 10f:F1}";
                 }
 
                 UpdatePipelineStats();

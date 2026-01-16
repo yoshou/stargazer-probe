@@ -284,7 +284,7 @@ public final class Camera2Capture {
             if (fpsTracker.isWindowElapsed(timestamp)) {
                 double fps = fpsTracker.getFps(timestamp);
                 double avgProcMs = fpsTracker.getAvgProcessingMs();
-                Log.i(TAG, "Camera2 incomingFPS=" + String.format("%.1f", fps)
+                Log.i(TAG, "Camera2 incomingFPS=" + String.format("%.1f", Math.round(fps * 10.0) / 10.0)
                         + " size=" + (cameraInfo != null ? (cameraInfo.size.getWidth() + "x" + cameraInfo.size.getHeight()) : "?")
                         + " jpegQ=" + jpegQuality
                         + " avgProcMs=" + String.format("%.2f", avgProcMs));
