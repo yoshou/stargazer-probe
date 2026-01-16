@@ -3,8 +3,6 @@ package com.stargazerprobe.camera;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.ImageFormat;
-import android.graphics.Rect;
-import android.graphics.YuvImage;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
@@ -24,11 +22,10 @@ import android.view.Surface;
 import android.view.WindowManager;
 
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -36,17 +33,20 @@ import java.util.List;
 public final class Camera2Capture {
     private static final String TAG = "Camera2Capture";
 
+    // Output format: we want encoded JPEG bytes directly.
+    private static final int OUTPUT_IMAGE_FORMAT = ImageFormat.JPEG;
+
     // Image processing guard: keep only one conversion active to avoid callback backlog.
     private final AtomicBoolean isProcessingImage = new AtomicBoolean(false);
 
     private final Object frameLock = new Object();
-    private byte[] latestJpeg;
+    // FIFO queue of encoded JPEG frames to avoid drops caused by polling.
+    // Unity will drain this queue via consumeNextJpeg().
+    private final ArrayDeque<byte[]> jpegQueue = new ArrayDeque<>();
+    private final ArrayDeque<Long> timestampQueue = new ArrayDeque<>();
+    private int maxQueuedFrames = 32; // ~1s at 30fps
+    private long droppedFrames;
     private long latestTimestampNs;
-
-    // Reused buffers to reduce per-frame allocations (critical for sustained 30fps).
-    private byte[] nv21Buffer;
-    private Rect jpegRect;
-    private ByteArrayOutputStream jpegStream;
 
     // Diagnostics
     private Range<Integer> activeFpsRange;
@@ -57,8 +57,7 @@ public final class Camera2Capture {
     private int jpegQuality = 75;
     private int requestedJpegQuality = 75;
     private int targetFpsRequested = 30;
-    private boolean adaptiveJpegQuality = true;
-    private int minJpegQuality = 35;
+    private boolean adaptiveJpegQuality = false;
 
     // Processing-time diagnostics (windowed)
     private long fpsWindowProcNs;
@@ -118,12 +117,9 @@ public final class Camera2Capture {
 
             int w = selectedSize.getWidth();
             int h = selectedSize.getHeight();
-            nv21Buffer = new byte[w * h * 3 / 2];
-            jpegRect = new Rect(0, 0, w, h);
-            jpegStream = new ByteArrayOutputStream(Math.max(1024, w * h / 2));
 
             // Keep a slightly deeper queue to reduce stalls if conversion is momentarily slow.
-            imageReader = ImageReader.newInstance(w, h, ImageFormat.YUV_420_888, 4);
+            imageReader = ImageReader.newInstance(w, h, OUTPUT_IMAGE_FORMAT, 4);
             imageReader.setOnImageAvailableListener(reader -> onImageAvailable(reader), backgroundHandler);
 
             manager.openCamera(cameraId, new CameraDevice.StateCallback() {
@@ -161,8 +157,10 @@ public final class Camera2Capture {
 
     public void stop() {
         synchronized (frameLock) {
-            latestJpeg = null;
+            jpegQueue.clear();
+            timestampQueue.clear();
             latestTimestampNs = 0L;
+            droppedFrames = 0L;
         }
 
         isProcessingImage.set(false);
@@ -202,17 +200,47 @@ public final class Camera2Capture {
         characteristics = null;
         isFrontFacing = false;
         sensorOrientation = 0;
-
-        nv21Buffer = null;
-        jpegRect = null;
-        jpegStream = null;
     }
 
     public byte[] consumeLatestJpeg() {
         synchronized (frameLock) {
-            byte[] out = latestJpeg;
-            latestJpeg = null;
-            return out;
+            // Backward compatible behavior: return the most recent frame and drop older queued frames.
+            if (jpegQueue.isEmpty()) {
+                return null;
+            }
+
+            byte[] latest = null;
+            while (!jpegQueue.isEmpty()) {
+                latest = jpegQueue.removeLast();
+            }
+            timestampQueue.clear();
+            return latest;
+        }
+    }
+
+    // Preferred API: consume frames in order (oldest first).
+    public byte[] consumeNextJpeg() {
+        synchronized (frameLock) {
+            if (jpegQueue.isEmpty()) {
+                return null;
+            }
+            // Keep timestamp queue aligned.
+            if (!timestampQueue.isEmpty()) {
+                timestampQueue.removeFirst();
+            }
+            return jpegQueue.removeFirst();
+        }
+    }
+
+    public int getPendingJpegCount() {
+        synchronized (frameLock) {
+            return jpegQueue.size();
+        }
+    }
+
+    public long getDroppedJpegFrames() {
+        synchronized (frameLock) {
+            return droppedFrames;
         }
     }
 
@@ -316,6 +344,14 @@ public final class Camera2Capture {
                         CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
                         builder.addTarget(imageReader.getSurface());
 
+                        // JPEG quality is only applicable when output is JPEG.
+                        // Use the requested quality (1-100). Camera2 expects a Byte.
+                        try {
+                            builder.set(CaptureRequest.JPEG_QUALITY, (byte) Math.max(1, Math.min(100, requestedJpegQuality)));
+                        } catch (Exception ignored) {
+                            // Some devices may ignore or reject this key in certain templates.
+                        }
+
                         // Prefer performance-oriented defaults for realtime capture.
                         builder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
                         builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
@@ -361,15 +397,28 @@ public final class Camera2Capture {
             }
 
             long procStartNs = System.nanoTime();
-            byte[] jpeg = yuv420ToJpeg(image, this.jpegQuality);
+            byte[] jpeg = extractJpegBytes(image);
             long procEndNs = System.nanoTime();
             if (jpeg == null || jpeg.length == 0) {
                 return;
             }
 
             synchronized (frameLock) {
-                latestJpeg = jpeg;
-                latestTimestampNs = image.getTimestamp();
+                long ts = image.getTimestamp();
+                latestTimestampNs = ts;
+
+                // Bound queue to avoid unbounded memory growth.
+                // If consumer falls behind, drop oldest frames (counted) rather than OOM.
+                while (jpegQueue.size() >= Math.max(1, maxQueuedFrames)) {
+                    jpegQueue.removeFirst();
+                    if (!timestampQueue.isEmpty()) {
+                        timestampQueue.removeFirst();
+                    }
+                    droppedFrames++;
+                }
+
+                jpegQueue.addLast(jpeg);
+                timestampQueue.addLast(ts);
             }
 
             // Periodic incoming-frame FPS diagnostics (based on camera timestamps).
@@ -387,21 +436,10 @@ public final class Camera2Capture {
                     double fps = (fpsWindowFrames * 1_000_000_000.0) / (double) dt;
                     double avgProcMs = fpsWindowFrames > 0 ? (fpsWindowProcNs / 1_000_000.0) / (double) fpsWindowFrames : 0.0;
 
-                    // Adaptive quality: if we cannot keep up, lower JPEG quality to prioritize FPS.
-                    // This does not require restarting the capture session.
-                    if (adaptiveJpegQuality) {
-                        if (fps < (double) targetFpsRequested - 0.5 && jpegQuality > minJpegQuality) {
-                            jpegQuality = Math.max(minJpegQuality, jpegQuality - 5);
-                        } else if (fps > (double) targetFpsRequested + 1.5 && jpegQuality < requestedJpegQuality) {
-                            jpegQuality = Math.min(requestedJpegQuality, jpegQuality + 1);
-                        }
-                    }
-
                     Log.i(TAG, "Camera2 incomingFPS=" + String.format("%.1f", fps)
                             + " size=" + (selectedSize != null ? (selectedSize.getWidth() + "x" + selectedSize.getHeight()) : "?")
                             + " aeFpsRange=" + (activeFpsRange != null ? activeFpsRange.toString() : "null")
-                            + " jpegQ=" + this.jpegQuality
-                            + " jpegQMax=" + this.requestedJpegQuality
+                            + " jpegQ=" + this.requestedJpegQuality
                             + " avgProcMs=" + String.format("%.2f", avgProcMs));
                     fpsWindowStartNs = ts;
                     fpsWindowFrames = 0;
@@ -419,96 +457,34 @@ public final class Camera2Capture {
         }
     }
 
-    private byte[] yuv420ToJpeg(Image image, int jpegQuality) {
+
+    private static byte[] extractJpegBytes(Image image) {
         if (image == null) {
             return null;
         }
 
-        int width = image.getWidth();
-        int height = image.getHeight();
+        try {
+            Image.Plane[] planes = image.getPlanes();
+            if (planes == null || planes.length < 1) {
+                return null;
+            }
 
-        int required = width * height * 3 / 2;
-        if (nv21Buffer == null || nv21Buffer.length < required) {
-            nv21Buffer = new byte[required];
-        }
-        if (jpegRect == null || jpegRect.width() != width || jpegRect.height() != height) {
-            jpegRect = new Rect(0, 0, width, height);
-        }
-        if (jpegStream == null) {
-            jpegStream = new ByteArrayOutputStream(Math.max(1024, width * height / 2));
-        }
+            ByteBuffer buffer = planes[0].getBuffer();
+            if (buffer == null) {
+                return null;
+            }
 
-        if (!yuv420ToNv21(image, nv21Buffer)) {
+            int length = buffer.remaining();
+            if (length <= 0) {
+                return null;
+            }
+
+            byte[] jpeg = new byte[length];
+            buffer.get(jpeg);
+            return jpeg;
+        } catch (Exception ignored) {
             return null;
         }
-
-        jpegStream.reset();
-        YuvImage yuvImage = new YuvImage(nv21Buffer, ImageFormat.NV21, width, height, null);
-        boolean ok = yuvImage.compressToJpeg(jpegRect, jpegQuality, jpegStream);
-        return ok ? jpegStream.toByteArray() : null;
-    }
-
-    private static boolean yuv420ToNv21(Image image, byte[] out) {
-        Image.Plane[] planes = image.getPlanes();
-        if (planes == null || planes.length < 3) {
-            return false;
-        }
-
-        int width = image.getWidth();
-        int height = image.getHeight();
-
-        int ySize = width * height;
-        int uvSize = width * height / 2;
-        if (out == null || out.length < (ySize + uvSize)) {
-            return false;
-        }
-
-        ByteBuffer yBuffer = planes[0].getBuffer();
-        ByteBuffer uBuffer = planes[1].getBuffer();
-        ByteBuffer vBuffer = planes[2].getBuffer();
-
-        int yRowStride = planes[0].getRowStride();
-        int yPixelStride = planes[0].getPixelStride();
-
-        int uRowStride = planes[1].getRowStride();
-        int uPixelStride = planes[1].getPixelStride();
-
-        int vRowStride = planes[2].getRowStride();
-        int vPixelStride = planes[2].getPixelStride();
-
-        // Y plane
-        int outIndex = 0;
-        for (int row = 0; row < height; row++) {
-            int yRowStart = row * yRowStride;
-            if (yPixelStride == 1) {
-                yBuffer.position(yRowStart);
-                yBuffer.get(out, outIndex, width);
-                outIndex += width;
-            } else {
-                for (int col = 0; col < width; col++) {
-                    out[outIndex++] = yBuffer.get(yRowStart + col * yPixelStride);
-                }
-            }
-        }
-
-        // Interleave VU (NV21)
-        int chromaHeight = height / 2;
-        int chromaWidth = width / 2;
-        int uvOutStart = ySize;
-        for (int row = 0; row < chromaHeight; row++) {
-            int uRowStart = row * uRowStride;
-            int vRowStart = row * vRowStride;
-            for (int col = 0; col < chromaWidth; col++) {
-                int uIndex = uRowStart + col * uPixelStride;
-                int vIndex = vRowStart + col * vPixelStride;
-
-                int uvIndex = uvOutStart + row * width + col * 2;
-                out[uvIndex] = vBuffer.get(vIndex);
-                out[uvIndex + 1] = uBuffer.get(uIndex);
-            }
-        }
-
-        return true;
     }
 
     private static int getDeviceRotationDegrees(Activity activity) {
@@ -606,7 +582,7 @@ public final class Camera2Capture {
                 continue;
             }
 
-            Size[] sizes = map.getOutputSizes(ImageFormat.YUV_420_888);
+            Size[] sizes = map.getOutputSizes(OUTPUT_IMAGE_FORMAT);
             if (sizes == null || sizes.length == 0) {
                 continue;
             }
@@ -631,7 +607,7 @@ public final class Camera2Capture {
             StreamConfigurationMap map = cc.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
             if (map == null) continue;
 
-            Size[] sizes = map.getOutputSizes(ImageFormat.YUV_420_888);
+            Size[] sizes = map.getOutputSizes(OUTPUT_IMAGE_FORMAT);
             if (sizes == null || sizes.length == 0) continue;
 
             Size bestSize = chooseBestSize(map, sizes, targetWidth, targetHeight, targetFps);
@@ -665,7 +641,7 @@ public final class Camera2Capture {
 
             if (map != null && targetFrameNs > 0L) {
                 try {
-                    long minFrameDuration = map.getOutputMinFrameDuration(ImageFormat.YUV_420_888, s);
+                    long minFrameDuration = map.getOutputMinFrameDuration(OUTPUT_IMAGE_FORMAT, s);
                     if (minFrameDuration > 0L && minFrameDuration > targetFrameNs) {
                         // Cannot meet target FPS at this resolution.
                         continue;

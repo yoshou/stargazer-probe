@@ -197,146 +197,160 @@ namespace StargazerProbe.Camera
             {
                 UpdateOrientationFlags();
 
-                byte[] jpeg = camera2.Call<byte[]>("consumeLatestJpeg");
-                if (jpeg == null || jpeg.Length == 0)
-                    return;
-
-                // Fast path: emit encoded JPEG directly (avoids decode->pixels->encode).
-                if (preferJpegPassthrough && OnJpegCaptured != null)
+                // Drain queued frames to avoid drops caused by polling.
+                // Java side buffers frames; we consume all currently available frames in order.
+                byte[] jpegForPreview = null;
+                int framesThisTick = 0;
+                while (true)
                 {
-                    if (javaWidth <= 0 || javaHeight <= 0)
+                    byte[] jpeg = camera2.Call<byte[]>("consumeNextJpeg");
+                    if (jpeg == null || jpeg.Length == 0)
+                        break;
+
+                    framesThisTick++;
+                    jpegForPreview = jpeg;
+
+                    // Fast path: emit encoded JPEG directly (avoids decode->pixels->encode).
+                    if (preferJpegPassthrough && OnJpegCaptured != null)
                     {
-                        javaWidth = camera2.Call<int>("getWidth");
-                        javaHeight = camera2.Call<int>("getHeight");
+                        if (javaWidth <= 0 || javaHeight <= 0)
+                        {
+                            javaWidth = camera2.Call<int>("getWidth");
+                            javaHeight = camera2.Call<int>("getHeight");
+                        }
+
+                        if (javaJpegQuality <= 0)
+                        {
+                            javaJpegQuality = camera2.Call<int>("getJpegQuality");
+                        }
+
+                        // Update intrinsics periodically (cheap JNI call). Keep dimensions aligned.
+                        UpdateIntrinsicsFromJava();
+                        if (hasIntrinsics)
+                        {
+                            currentIntrinsics.ImageWidth = javaWidth;
+                            currentIntrinsics.ImageHeight = javaHeight;
+                        }
+
+                        var frameData = new CameraFrameData
+                        {
+                            Timestamp = Time.realtimeSinceStartup,
+                            ImageData = jpeg,
+                            Width = javaWidth > 0 ? javaWidth : targetWidth,
+                            Height = javaHeight > 0 ? javaHeight : targetHeight,
+                            Quality = javaJpegQuality > 0 ? javaJpegQuality : targetJpegQuality,
+                            Intrinsics = hasIntrinsics ? currentIntrinsics : default
+                        };
+
+                        OnJpegCaptured?.Invoke(frameData);
+
+                        // Update measured capture FPS (1-second window)
+                        if (fpsWindowStartTime <= 0f)
+                        {
+                            fpsWindowStartTime = Time.unscaledTime;
+                            fpsWindowFrames = 0;
+                        }
+                        fpsWindowFrames++;
+                        float dt = Time.unscaledTime - fpsWindowStartTime;
+                        if (dt >= 1.0f)
+                        {
+                            ActualFPS = fpsWindowFrames / Mathf.Max(0.0001f, dt);
+                            fpsWindowStartTime = Time.unscaledTime;
+                            fpsWindowFrames = 0;
+                        }
+
+                        continue;
                     }
 
-                    if (javaJpegQuality <= 0)
+                    // Slow path: decode and emit raw pixels.
+                    EnsurePreviewTexture();
+
+                    // Decode into Texture2D (RGBA32)
+                    if (!ImageConversion.LoadImage(previewTexture, jpeg, markNonReadable: false))
+                        continue;
+
+                    int w = previewTexture.width;
+                    int h = previewTexture.height;
+
+                    EnsurePixelBuffers(w, h);
+
+                    Color32[] pixels = RentPixelBuffer();
+                    if (pixels == null)
                     {
-                        javaJpegQuality = camera2.Call<int>("getJpegQuality");
+                        SkippedFrames++;
+                        continue;
                     }
 
-                    // Update intrinsics periodically (cheap JNI call). Keep dimensions aligned.
-                    UpdateIntrinsicsFromJava();
-                    if (hasIntrinsics)
+                    bool emitted = false;
+                    try
                     {
-                        currentIntrinsics.ImageWidth = javaWidth;
-                        currentIntrinsics.ImageHeight = javaHeight;
+                        // Copy decoded pixels into pooled buffer
+                        var raw = previewTexture.GetRawTextureData<Color32>();
+                        if (raw.Length == pixels.Length)
+                        {
+                            raw.CopyTo(pixels);
+                        }
+                        else
+                        {
+                            // Fallback (should be rare): allocate and copy
+                            Color32[] tmp = previewTexture.GetPixels32();
+                            int count = Mathf.Min(tmp.Length, pixels.Length);
+                            Array.Copy(tmp, pixels, count);
+                        }
+
+                        // Keep intrinsics aligned to current image dimensions
+                        if (hasIntrinsics)
+                        {
+                            currentIntrinsics.ImageWidth = w;
+                            currentIntrinsics.ImageHeight = h;
+                        }
+
+                        OnFrameCaptured?.Invoke(new RawCameraFrameData
+                        {
+                            Timestamp = Time.realtimeSinceStartup,
+                            Width = w,
+                            Height = h,
+                            Pixels = pixels,
+                            Intrinsics = hasIntrinsics ? currentIntrinsics : default,
+                            ReturnBufferCallback = ReturnPixelBuffer
+                        });
+
+                        emitted = true;
+
+                        // Update measured capture FPS (1-second window)
+                        if (fpsWindowStartTime <= 0f)
+                        {
+                            fpsWindowStartTime = Time.unscaledTime;
+                            fpsWindowFrames = 0;
+                        }
+
+                        fpsWindowFrames++;
+                        float dt = Time.unscaledTime - fpsWindowStartTime;
+                        if (dt >= 1.0f)
+                        {
+                            ActualFPS = fpsWindowFrames / Mathf.Max(0.0001f, dt);
+                            fpsWindowStartTime = Time.unscaledTime;
+                            fpsWindowFrames = 0;
+                        }
                     }
-
-                    var frameData = new CameraFrameData
+                    finally
                     {
-                        Timestamp = Time.realtimeSinceStartup,
-                        ImageData = jpeg,
-                        Width = javaWidth > 0 ? javaWidth : targetWidth,
-                        Height = javaHeight > 0 ? javaHeight : targetHeight,
-                        Quality = javaJpegQuality > 0 ? javaJpegQuality : targetJpegQuality,
-                        Intrinsics = hasIntrinsics ? currentIntrinsics : default
-                    };
-
-                    OnJpegCaptured?.Invoke(frameData);
-
-                    // Keep UI preview working: decode at a lower rate to avoid killing FPS.
-                    if (Time.unscaledTime - lastPreviewDecodeTime >= previewDecodeInterval)
-                    {
-                        lastPreviewDecodeTime = Time.unscaledTime;
-                        EnsurePreviewTexture();
-                        ImageConversion.LoadImage(previewTexture, jpeg, markNonReadable: false);
+                        if (!emitted)
+                        {
+                            ReturnPixelBuffer(pixels);
+                        }
                     }
-
-                    // Update measured capture FPS (1-second window)
-                    if (fpsWindowStartTime <= 0f)
-                    {
-                        fpsWindowStartTime = Time.unscaledTime;
-                        fpsWindowFrames = 0;
-                    }
-                    fpsWindowFrames++;
-                    float dt = Time.unscaledTime - fpsWindowStartTime;
-                    if (dt >= 1.0f)
-                    {
-                        ActualFPS = fpsWindowFrames / Mathf.Max(0.0001f, dt);
-                        fpsWindowStartTime = Time.unscaledTime;
-                        fpsWindowFrames = 0;
-                    }
-
-                    return;
                 }
 
-                EnsurePreviewTexture();
-
-                // Decode into Texture2D (RGBA32)
-                if (!ImageConversion.LoadImage(previewTexture, jpeg, markNonReadable: false))
+                if (framesThisTick == 0)
                     return;
 
-                int w = previewTexture.width;
-                int h = previewTexture.height;
-
-                EnsurePixelBuffers(w, h);
-
-                Color32[] pixels = RentPixelBuffer();
-                if (pixels == null)
+                // Keep UI preview working for JPEG passthrough: decode latest frame at a lower rate.
+                if (preferJpegPassthrough && jpegForPreview != null && Time.unscaledTime - lastPreviewDecodeTime >= previewDecodeInterval)
                 {
-                    SkippedFrames++;
-                    return;
-                }
-
-                bool emitted = false;
-                try
-                {
-                    // Copy decoded pixels into pooled buffer
-                    var raw = previewTexture.GetRawTextureData<Color32>();
-                    if (raw.Length == pixels.Length)
-                    {
-                        raw.CopyTo(pixels);
-                    }
-                    else
-                    {
-                        // Fallback (should be rare): allocate and copy
-                        Color32[] tmp = previewTexture.GetPixels32();
-                        int count = Mathf.Min(tmp.Length, pixels.Length);
-                        Array.Copy(tmp, pixels, count);
-                    }
-
-                    // Keep intrinsics aligned to current image dimensions
-                    if (hasIntrinsics)
-                    {
-                        currentIntrinsics.ImageWidth = w;
-                        currentIntrinsics.ImageHeight = h;
-                    }
-
-                    OnFrameCaptured?.Invoke(new RawCameraFrameData
-                    {
-                        Timestamp = Time.realtimeSinceStartup,
-                        Width = w,
-                        Height = h,
-                        Pixels = pixels,
-                        Intrinsics = hasIntrinsics ? currentIntrinsics : default,
-                        ReturnBufferCallback = ReturnPixelBuffer
-                    });
-
-                    emitted = true;
-
-                    // Update measured capture FPS (1-second window)
-                    if (fpsWindowStartTime <= 0f)
-                    {
-                        fpsWindowStartTime = Time.unscaledTime;
-                        fpsWindowFrames = 0;
-                    }
-
-                    fpsWindowFrames++;
-                    float dt = Time.unscaledTime - fpsWindowStartTime;
-                    if (dt >= 1.0f)
-                    {
-                        ActualFPS = fpsWindowFrames / Mathf.Max(0.0001f, dt);
-                        fpsWindowStartTime = Time.unscaledTime;
-                        fpsWindowFrames = 0;
-                    }
-                }
-                finally
-                {
-                    if (!emitted)
-                    {
-                        ReturnPixelBuffer(pixels);
-                    }
+                    lastPreviewDecodeTime = Time.unscaledTime;
+                    EnsurePreviewTexture();
+                    ImageConversion.LoadImage(previewTexture, jpegForPreview, markNonReadable: false);
                 }
             }
             catch (Exception ex)
