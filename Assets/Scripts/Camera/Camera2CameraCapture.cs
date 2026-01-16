@@ -2,10 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-
-#if UNITY_ANDROID
 using UnityEngine.Android;
-#endif
 
 namespace StargazerProbe.Camera
 {
@@ -78,10 +75,9 @@ namespace StargazerProbe.Camera
         private CameraIntrinsics currentIntrinsics;
         private bool hasIntrinsics;
 
-#if UNITY_ANDROID && !UNITY_EDITOR
+        // Private Fields - Android Camera2
         private AndroidJavaObject camera2;
         private AndroidJavaObject activity;
-#endif
 
         private void Awake()
         {
@@ -105,14 +101,9 @@ namespace StargazerProbe.Camera
             javaHeight = 0;
             lastPreviewDecodeTime = 0f;
 
-#if UNITY_ANDROID && !UNITY_EDITOR
             StartCoroutine(InitializeCamera2());
-#else
-            OnCaptureStartFailed?.Invoke("Camera2 capture is supported only on Android device builds");
-#endif
         }
 
-#if UNITY_ANDROID && !UNITY_EDITOR
         private IEnumerator InitializeCamera2()
         {
             // Request camera permission if needed
@@ -170,7 +161,6 @@ namespace StargazerProbe.Camera
                 yield break;
             }
         }
-#endif
 
         private void Update()
         {
@@ -204,7 +194,6 @@ namespace StargazerProbe.Camera
 
         private void CaptureFrame()
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
             if (camera2 == null)
                 return;
 
@@ -342,7 +331,6 @@ namespace StargazerProbe.Camera
             {
                 Debug.LogError($"[Camera2CameraCapture] CaptureFrame failed: {ex.GetType().Name}: {ex.Message}");
             }
-#endif
         }
 
         public void StopCapture()
@@ -352,7 +340,6 @@ namespace StargazerProbe.Camera
 
             IsCapturing = false;
 
-#if UNITY_ANDROID && !UNITY_EDITOR
             try
             {
                 camera2?.Call("stop");
@@ -367,7 +354,6 @@ namespace StargazerProbe.Camera
 
             camera2 = null;
             activity = null;
-#endif
 
             availableBuffers = null;
             hasIntrinsics = false;
@@ -466,7 +452,6 @@ namespace StargazerProbe.Camera
 
         // ========== Platform-Specific Methods (Android Camera2) ==========
 
-#if UNITY_ANDROID && !UNITY_EDITOR
         private void UpdateOrientationFlags()
         {
             if (camera2 == null)
@@ -517,7 +502,6 @@ namespace StargazerProbe.Camera
                 hasIntrinsics = false;
             }
         }
-#endif
 
         private void OnDestroy()
         {
