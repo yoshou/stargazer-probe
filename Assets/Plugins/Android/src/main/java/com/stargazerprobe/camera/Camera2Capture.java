@@ -52,12 +52,7 @@ public final class Camera2Capture {
     // Diagnostics
     private final FpsTracker fpsTracker = new FpsTracker();
 
-    private boolean isFrontFacing;
-    private int sensorOrientation;
-
-    private String cameraId;
-    private Size selectedSize;
-    private CameraCharacteristics characteristics;
+    private CameraInfo cameraInfo;
 
     private HandlerThread backgroundThread;
     private Handler backgroundHandler;
@@ -84,30 +79,23 @@ public final class Camera2Capture {
             startBackgroundThread();
 
             CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
-            CameraSelection selection = chooseCamera(manager, useFront, targetWidth, targetHeight, targetFps);
-            if (selection == null) {
+            cameraInfo = chooseCamera(manager, useFront, targetWidth, targetHeight, targetFps);
+            if (cameraInfo == null) {
                 Log.e(TAG, "No suitable camera found");
                 stop();
                 return false;
             }
 
-            cameraId = selection.cameraId;
-            selectedSize = selection.size;
-            characteristics = selection.characteristics;
-            isFrontFacing = selection.isFrontFacing;
-            Integer so = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
-            sensorOrientation = so != null ? so : 0;
-
             fpsTracker.reset();
 
-            int w = selectedSize.getWidth();
-            int h = selectedSize.getHeight();
+            int w = cameraInfo.size.getWidth();
+            int h = cameraInfo.size.getHeight();
 
             // Keep a slightly deeper queue to reduce stalls if conversion is momentarily slow.
             imageReader = ImageReader.newInstance(w, h, OUTPUT_IMAGE_FORMAT, 4);
             imageReader.setOnImageAvailableListener(reader -> onImageAvailable(reader), backgroundHandler);
 
-            manager.openCamera(cameraId, new CameraDevice.StateCallback() {
+            manager.openCamera(cameraInfo.cameraId, new CameraDevice.StateCallback() {
                 @Override
                 public void onOpened(CameraDevice camera) {
                     cameraDevice = camera;
@@ -175,11 +163,7 @@ public final class Camera2Capture {
 
         stopBackgroundThread();
 
-        cameraId = null;
-        selectedSize = null;
-        characteristics = null;
-        isFrontFacing = false;
-        sensorOrientation = 0;
+        cameraInfo = null;
     }
 
     public byte[] consumeNextJpeg() {
@@ -192,11 +176,11 @@ public final class Camera2Capture {
     }
 
     public int getWidth() {
-        return selectedSize != null ? selectedSize.getWidth() : 0;
+        return cameraInfo != null ? cameraInfo.size.getWidth() : 0;
     }
 
     public int getHeight() {
-        return selectedSize != null ? selectedSize.getHeight() : 0;
+        return cameraInfo != null ? cameraInfo.size.getHeight() : 0;
     }
 
     public int getJpegQuality() {
@@ -204,19 +188,21 @@ public final class Camera2Capture {
     }
 
     public boolean getIsFrontFacing() {
-        return isFrontFacing;
+        return cameraInfo != null && cameraInfo.isFrontFacing;
     }
 
     public int getRotationDegrees(Activity activity) {
-        if (activity == null) {
+        if (activity == null || cameraInfo == null) {
             return 0;
         }
 
         int deviceRotation = getDeviceRotationDegrees(activity);
+        Integer so = cameraInfo.characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+        int sensorOrientation = so != null ? so : 0;
 
         // Degrees needed to rotate the camera buffer to match the current device orientation.
         // (UI layer can apply -rotation for Unity's coordinate convention.)
-        if (isFrontFacing) {
+        if (cameraInfo.isFrontFacing) {
             return (sensorOrientation + deviceRotation) % 360;
         }
 
@@ -224,40 +210,7 @@ public final class Camera2Capture {
     }
 
     public float[] getIntrinsics() {
-        if (characteristics == null || selectedSize == null) {
-            return null;
-        }
-
-        try {
-            float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
-            SizeF physicalSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
-            android.graphics.Rect activeArray = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
-
-            if (focalLengths == null || focalLengths.length == 0 || physicalSize == null || activeArray == null) {
-                return null;
-            }
-
-            float focalMm = focalLengths[0];
-
-            float pxPerMmX = (float) activeArray.width() / physicalSize.getWidth();
-            float pxPerMmY = (float) activeArray.height() / physicalSize.getHeight();
-
-            float fxSensor = focalMm * pxPerMmX;
-            float fySensor = focalMm * pxPerMmY;
-
-            float scaleX = (float) selectedSize.getWidth() / (float) activeArray.width();
-            float scaleY = (float) selectedSize.getHeight() / (float) activeArray.height();
-            float fx = fxSensor * scaleX;
-            float fy = fySensor * scaleY;
-
-            float cx = (activeArray.width() / 2.0f) * scaleX;
-            float cy = (activeArray.height() / 2.0f) * scaleY;
-
-            return new float[]{fx, fy, cx, cy};
-        } catch (Exception e) {
-            Log.w(TAG, "getIntrinsics failed", e);
-            return null;
-        }
+        return cameraInfo != null ? cameraInfo.getIntrinsics() : null;
     }
 
     private void createSession(int targetFps) {
@@ -332,7 +285,7 @@ public final class Camera2Capture {
                 double fps = fpsTracker.getFps(timestamp);
                 double avgProcMs = fpsTracker.getAvgProcessingMs();
                 Log.i(TAG, "Camera2 incomingFPS=" + String.format("%.1f", fps)
-                        + " size=" + (selectedSize != null ? (selectedSize.getWidth() + "x" + selectedSize.getHeight()) : "?")
+                        + " size=" + (cameraInfo != null ? (cameraInfo.size.getWidth() + "x" + cameraInfo.size.getHeight()) : "?")
                         + " jpegQ=" + jpegQuality
                         + " avgProcMs=" + String.format("%.2f", avgProcMs));
                 fpsTracker.resetWindow(timestamp);
@@ -366,7 +319,7 @@ public final class Camera2Capture {
         builder.set(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_FAST);
         builder.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF);
 
-        Range<Integer> fpsRange = chooseFpsRange(characteristics, targetFps);
+        Range<Integer> fpsRange = cameraInfo != null ? chooseFpsRange(cameraInfo.characteristics, targetFps) : null;
         if (fpsRange != null) {
             builder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fpsRange);
         }
@@ -527,7 +480,7 @@ public final class Camera2Capture {
         }
     }
 
-    private static CameraSelection chooseCamera(CameraManager manager, boolean useFront, int targetWidth, int targetHeight, int targetFps) throws CameraAccessException {
+    private static CameraInfo chooseCamera(CameraManager manager, boolean useFront, int targetWidth, int targetHeight, int targetFps) throws CameraAccessException {
         if (manager == null) {
             return null;
         }
@@ -537,7 +490,7 @@ public final class Camera2Capture {
             return null;
         }
 
-        List<CameraSelection> candidates = new ArrayList<>();
+        List<CameraInfo> candidates = new ArrayList<>();
 
         for (String id : ids) {
             if (id == null) continue;
@@ -565,7 +518,7 @@ public final class Camera2Capture {
                 continue;
             }
 
-            candidates.add(new CameraSelection(id, bestSize, cc, isFront));
+            candidates.add(new CameraInfo(id, bestSize, cc, isFront));
         }
 
         if (!candidates.isEmpty()) {
@@ -589,7 +542,7 @@ public final class Camera2Capture {
             Integer facing = cc.get(CameraCharacteristics.LENS_FACING);
             boolean isFront = facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT;
 
-            return new CameraSelection(id, bestSize, cc, isFront);
+            return new CameraInfo(id, bestSize, cc, isFront);
         }
 
         return null;
@@ -686,17 +639,50 @@ public final class Camera2Capture {
         }
     }
 
-    private static final class CameraSelection {
+    private static final class CameraInfo {
         public final String cameraId;
         public final Size size;
         public final CameraCharacteristics characteristics;
         public final boolean isFrontFacing;
 
-        public CameraSelection(String cameraId, Size size, CameraCharacteristics characteristics, boolean isFrontFacing) {
+        public CameraInfo(String cameraId, Size size, CameraCharacteristics characteristics, boolean isFrontFacing) {
             this.cameraId = cameraId;
             this.size = size;
             this.characteristics = characteristics;
             this.isFrontFacing = isFrontFacing;
+        }
+
+        public float[] getIntrinsics() {
+            try {
+                float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+                SizeF physicalSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
+                android.graphics.Rect activeArray = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
+
+                if (focalLengths == null || focalLengths.length == 0 || physicalSize == null || activeArray == null) {
+                    return null;
+                }
+
+                float focalMm = focalLengths[0];
+
+                float pxPerMmX = (float) activeArray.width() / physicalSize.getWidth();
+                float pxPerMmY = (float) activeArray.height() / physicalSize.getHeight();
+
+                float fxSensor = focalMm * pxPerMmX;
+                float fySensor = focalMm * pxPerMmY;
+
+                float scaleX = (float) size.getWidth() / (float) activeArray.width();
+                float scaleY = (float) size.getHeight() / (float) activeArray.height();
+                float fx = fxSensor * scaleX;
+                float fy = fySensor * scaleY;
+
+                float cx = (activeArray.width() / 2.0f) * scaleX;
+                float cy = (activeArray.height() / 2.0f) * scaleY;
+
+                return new float[]{fx, fy, cx, cy};
+            } catch (Exception e) {
+                Log.w(TAG, "getIntrinsics failed", e);
+                return null;
+            }
         }
     }
 }
