@@ -45,16 +45,14 @@ public final class Camera2Capture {
     private final ArrayDeque<byte[]> jpegQueue = new ArrayDeque<>();
     private int maxQueuedFrames = 32; // ~1s at 30fps
 
+    // Camera configuration
+    private int jpegQuality = 75;
+    private int targetFpsRequested = 30;
+
     // Diagnostics
     private Range<Integer> activeFpsRange;
     private long fpsWindowStartNs;
     private int fpsWindowFrames;
-
-    // JPEG quality (1-100). Lower is faster/smaller.
-    private int jpegQuality = 75;
-    private int targetFpsRequested = 30;
-
-    // Processing-time diagnostics (windowed)
     private long fpsWindowProcNs;
 
     private boolean isFrontFacing;
@@ -103,11 +101,7 @@ public final class Camera2Capture {
             Integer so = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
             sensorOrientation = so != null ? so : 0;
 
-            // Reset diagnostics and reusable buffers
-            activeFpsRange = null;
-            fpsWindowStartNs = 0L;
-            fpsWindowFrames = 0;
-            fpsWindowProcNs = 0L;
+            resetDiagnostics();
 
             int w = selectedSize.getWidth();
             int h = selectedSize.getHeight();
@@ -155,9 +149,7 @@ public final class Camera2Capture {
         }
 
         isProcessingImage.set(false);
-        activeFpsRange = null;
-        fpsWindowStartNs = 0L;
-        fpsWindowFrames = 0;
+        resetDiagnostics();
 
         try {
             if (captureSession != null) {
@@ -288,28 +280,7 @@ public final class Camera2Capture {
                         CaptureRequest.Builder builder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
                         builder.addTarget(imageReader.getSurface());
 
-                        // JPEG quality is only applicable when output is JPEG.
-                        // Use the quality setting (1-100). Camera2 expects a Byte.
-                        try {
-                            builder.set(CaptureRequest.JPEG_QUALITY, (byte) Math.max(1, Math.min(100, jpegQuality)));
-                        } catch (Exception ignored) {
-                            // Some devices may ignore or reject this key in certain templates.
-                        }
-
-                        // Prefer performance-oriented defaults for realtime capture.
-                        builder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
-                        builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
-                        builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
-                        builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
-                        builder.set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_FAST);
-                        builder.set(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_FAST);
-                        builder.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF);
-
-                        Range<Integer> fpsRange = chooseFpsRange(characteristics, targetFps);
-                        if (fpsRange != null) {
-                            builder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fpsRange);
-                            activeFpsRange = fpsRange;
-                        }
+                        configureCaptureRequest(builder, targetFps);
 
                         session.setRepeatingRequest(builder.build(), null, backgroundHandler);
                     } catch (Exception e) {
@@ -357,31 +328,7 @@ public final class Camera2Capture {
                 jpegQueue.addLast(jpeg);
             }
 
-            // Periodic incoming-frame FPS diagnostics (based on camera timestamps).
-            long ts = image.getTimestamp();
-            if (ts > 0) {
-                if (fpsWindowStartNs == 0L) {
-                    fpsWindowStartNs = ts;
-                    fpsWindowFrames = 0;
-                    fpsWindowProcNs = 0L;
-                }
-                fpsWindowFrames++;
-                fpsWindowProcNs += Math.max(0L, procEndNs - procStartNs);
-                long dt = ts - fpsWindowStartNs;
-                if (dt >= 1_000_000_000L) {
-                    double fps = (fpsWindowFrames * 1_000_000_000.0) / (double) dt;
-                    double avgProcMs = fpsWindowFrames > 0 ? (fpsWindowProcNs / 1_000_000.0) / (double) fpsWindowFrames : 0.0;
-
-                    Log.i(TAG, "Camera2 incomingFPS=" + String.format("%.1f", fps)
-                            + " size=" + (selectedSize != null ? (selectedSize.getWidth() + "x" + selectedSize.getHeight()) : "?")
-                            + " aeFpsRange=" + (activeFpsRange != null ? activeFpsRange.toString() : "null")
-                            + " jpegQ=" + this.jpegQuality
-                            + " avgProcMs=" + String.format("%.2f", avgProcMs));
-                    fpsWindowStartNs = ts;
-                    fpsWindowFrames = 0;
-                    fpsWindowProcNs = 0L;
-                }
-            }
+            updateFpsDiagnostics(image.getTimestamp(), procEndNs - procStartNs);
         } catch (Exception e) {
             Log.e(TAG, "onImageAvailable failed", e);
         } finally {
@@ -393,6 +340,68 @@ public final class Camera2Capture {
         }
     }
 
+    private void resetDiagnostics() {
+        activeFpsRange = null;
+        fpsWindowStartNs = 0L;
+        fpsWindowFrames = 0;
+        fpsWindowProcNs = 0L;
+    }
+
+    private void configureCaptureRequest(CaptureRequest.Builder builder, int targetFps) {
+        // JPEG quality is only applicable when output is JPEG.
+        // Use the quality setting (1-100). Camera2 expects a Byte.
+        try {
+            builder.set(CaptureRequest.JPEG_QUALITY, (byte) Math.max(1, Math.min(100, jpegQuality)));
+        } catch (Exception ignored) {
+            // Some devices may ignore or reject this key in certain templates.
+        }
+
+        // Prefer performance-oriented defaults for realtime capture.
+        builder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
+        builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+        builder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO);
+        builder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO);
+        builder.set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_FAST);
+        builder.set(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_FAST);
+        builder.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF);
+
+        Range<Integer> fpsRange = chooseFpsRange(characteristics, targetFps);
+        if (fpsRange != null) {
+            builder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fpsRange);
+            activeFpsRange = fpsRange;
+        }
+    }
+
+    private void updateFpsDiagnostics(long timestampNs, long processingTimeNs) {
+        if (timestampNs <= 0) {
+            return;
+        }
+
+        if (fpsWindowStartNs == 0L) {
+            fpsWindowStartNs = timestampNs;
+            fpsWindowFrames = 0;
+            fpsWindowProcNs = 0L;
+        }
+
+        fpsWindowFrames++;
+        fpsWindowProcNs += Math.max(0L, processingTimeNs);
+        long dt = timestampNs - fpsWindowStartNs;
+
+        if (dt >= 1_000_000_000L) {
+            double fps = (fpsWindowFrames * 1_000_000_000.0) / (double) dt;
+            double avgProcMs = fpsWindowFrames > 0 ? (fpsWindowProcNs / 1_000_000.0) / (double) fpsWindowFrames : 0.0;
+
+            Log.i(TAG, "Camera2 incomingFPS=" + String.format("%.1f", fps)
+                    + " size=" + (selectedSize != null ? (selectedSize.getWidth() + "x" + selectedSize.getHeight()) : "?")
+                    + " aeFpsRange=" + (activeFpsRange != null ? activeFpsRange.toString() : "null")
+                    + " jpegQ=" + jpegQuality
+                    + " avgProcMs=" + String.format("%.2f", avgProcMs));
+
+            fpsWindowStartNs = timestampNs;
+            fpsWindowFrames = 0;
+            fpsWindowProcNs = 0L;
+        }
+    }
 
     private static byte[] extractJpegBytes(Image image) {
         if (image == null) {
