@@ -52,7 +52,7 @@ namespace StargazerProbe.Grpc
             {
                 ImageData = ByteString.CopyFrom(frame.ImageData ?? System.Array.Empty<byte>()),
                 ImageSize = ToProtoIntVector2D(frame.Width, frame.Height),
-                Format = (Stargazer.CameraImage.Types.ImageFormat)frame.Quality,
+                Format = Stargazer.CameraImage.Types.ImageFormat.Jpeg,
                 Intrinsics = intrinsics
             };
         }
